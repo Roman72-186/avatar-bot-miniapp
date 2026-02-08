@@ -20,7 +20,7 @@ cd avatar-bot-miniapp
 npm install
 ```
 
-### 2. Настройка переменных окружения
+### 2. Настройка переменных окружения.  прнр
 
 ```bash
 cp .env.example .env
