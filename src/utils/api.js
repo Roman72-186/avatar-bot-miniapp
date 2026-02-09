@@ -34,8 +34,11 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000) {
   }
 }
 
-// Загрузка фото на fal.ai storage
+// Загрузка фото на fal.ai storage (таймаут 15 сек)
 async function uploadToFal(file) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
   try {
     // 1. Получаем upload URL
     const initResponse = await fetch('https://rest.alpha.fal.ai/storage/upload/initiate', {
@@ -48,6 +51,7 @@ async function uploadToFal(file) {
         file_name: file.name || 'photo.jpg',
         content_type: file.type || 'image/jpeg',
       }),
+      signal: controller.signal,
     });
 
     if (!initResponse.ok) {
@@ -63,6 +67,7 @@ async function uploadToFal(file) {
         'Content-Type': file.type || 'image/jpeg',
       },
       body: file,
+      signal: controller.signal,
     });
 
     if (!uploadResponse.ok) {
@@ -76,42 +81,78 @@ async function uploadToFal(file) {
       throw error;
     }
     throw new Error(`Stage: UPLOAD_PROCESS, Error: ${msg}`);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 // Сжатие изображения через canvas
 function compressImage(file, maxWidth = 1024, quality = 0.8) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      let width = img.width;
-      let height = img.height;
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
 
-      if (width > maxWidth) {
-        height = Math.round((height * maxWidth) / width);
-        width = maxWidth;
-      }
+      const cleanup = () => { try { URL.revokeObjectURL(objectUrl); } catch(e) {} };
+      const fallback = () => { cleanup(); resolve(file); };
 
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
+      // Таймаут на случай если Image не загрузится
+      const timer = setTimeout(fallback, 5000);
 
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg' }));
-          } else {
-            resolve(file);
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
           }
-        },
-        'image/jpeg',
-        quality
-      );
-    };
-    img.onerror = () => resolve(file);
-    img.src = URL.createObjectURL(file);
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Fallback: toBlob может не поддерживаться на старых Android
+          if (typeof canvas.toBlob === 'function') {
+            canvas.toBlob(
+              (blob) => {
+                cleanup();
+                if (blob) {
+                  resolve(new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg' }));
+                } else {
+                  resolve(file);
+                }
+              },
+              'image/jpeg',
+              quality
+            );
+          } else {
+            // Используем toDataURL как запасной вариант
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            const byteString = atob(dataUrl.split(',')[1]);
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+              ia[i] = byteString.charCodeAt(i);
+            }
+            const blob = new Blob([ab], { type: 'image/jpeg' });
+            cleanup();
+            resolve(new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg' }));
+          }
+        } catch (e) {
+          fallback();
+        }
+      };
+
+      img.onerror = () => { clearTimeout(timer); fallback(); };
+      img.src = objectUrl;
+    } catch (e) {
+      resolve(file);
+    }
   });
 }
 
