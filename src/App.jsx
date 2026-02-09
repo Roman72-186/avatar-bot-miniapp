@@ -26,7 +26,8 @@ export default function App() {
   const [freeLeft, setFreeLeft] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [creativity, setCreativity] = useState(50); // Default creativity level 50
+  const [creativity, setCreativity] = useState(50);
+  const [debugStep, setDebugStep] = useState(null);
 
   useEffect(() => {
     initTelegram();
@@ -71,7 +72,8 @@ export default function App() {
         photoFile,
         selectedStyle,
         initData,
-        creativity
+        creativity,
+        setDebugStep
       );
 
       // Парсим ответ от n8n
@@ -111,7 +113,7 @@ export default function App() {
       <div className="bg-gradient"></div>
       <div className="bg-noise"></div>
 
-      {screen === SCREENS.LOADING && <LoadingScreen />}
+      {screen === SCREENS.LOADING && <LoadingScreen debugStep={debugStep} />}
 
       {screen === SCREENS.RESULT && resultImage && (
         <ResultScreen

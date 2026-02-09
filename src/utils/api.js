@@ -167,27 +167,30 @@ function fileToBase64(file) {
 }
 
 // Запрос генерации аватарки
-export async function generateAvatar(userId, file, style, initData, creativity = 50) {
-  try {
-    // 0. Сжимаем изображение
-    const compressedFile = await compressImage(file);
+export async function generateAvatar(userId, file, style, initData, creativity = 50, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
 
-    // 1. Пробуем загрузить фото на fal.ai
+  try {
+    step('[1/5] Сжатие фото...');
+    const compressedFile = await compressImage(file);
+    step(`[2/5] Фото сжато (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на fal.ai...`);
+
     let imageUrl;
     let useFallback = false;
 
     try {
       imageUrl = await uploadToFal(compressedFile);
+      step('[3/5] Фото загружено. Отправка на генерацию...');
     } catch (uploadError) {
-      // Check if it's a network error (Failed to fetch) that could benefit from fallback
-      console.warn('Fal upload failed, using fallback method with base64:', uploadError.message);
+      step(`[3/5] fal.ai недоступен (${uploadError?.message?.slice(0, 50)}). Используем base64...`);
       useFallback = true;
     }
 
     let requestData;
     if (useFallback) {
-      // Prepare fallback data with base64
+      step('[3/5] Кодирование в base64...');
       const photoBase64 = await fileToBase64(compressedFile);
+      step(`[4/5] Base64 готов (${Math.round(photoBase64.length / 1024)} КБ). Отправка на n8n...`);
       requestData = {
         user_id: userId,
         photo_base64: photoBase64,
@@ -198,7 +201,7 @@ export async function generateAvatar(userId, file, style, initData, creativity =
         creativity: creativity,
       };
     } else {
-      // Original flow with image URL
+      step('[4/5] Отправка запроса на n8n...');
       requestData = {
         user_id: userId,
         image_url: imageUrl,
@@ -208,7 +211,7 @@ export async function generateAvatar(userId, file, style, initData, creativity =
       };
     }
 
-    // 2. Отправляем запрос на генерацию в n8n
+    step('[5/5] Ожидание генерации от AI...');
     const result = await apiRequest('generate', requestData);
 
     return result;

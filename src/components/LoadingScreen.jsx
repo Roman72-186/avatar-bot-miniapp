@@ -8,7 +8,7 @@ const LOADING_MESSAGES = [
   'Финальные штрихи... 🌟',
 ];
 
-export default function LoadingScreen() {
+export default function LoadingScreen({ debugStep }) {
   const [messageIndex, setMessageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
 
@@ -39,6 +39,11 @@ export default function LoadingScreen() {
         <div className="progress-fill" style={{ width: `${progress}%` }}></div>
       </div>
       <div className="loading-hint">Обычно занимает 10–20 секунд</div>
+      {debugStep && (
+        <div style={{ marginTop: 12, fontSize: 11, color: '#888', wordBreak: 'break-all', padding: '0 16px' }}>
+          {debugStep}
+        </div>
+      )}
     </div>
   );
 }
