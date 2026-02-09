@@ -26,6 +26,7 @@ export default function App() {
   const [freeLeft, setFreeLeft] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [creativity, setCreativity] = useState(50); // Default creativity level 50
 
   useEffect(() => {
     initTelegram();
@@ -69,7 +70,8 @@ export default function App() {
         userId,
         photoFile,
         selectedStyle,
-        initData
+        initData,
+        creativity
       );
 
       // Парсим ответ от n8n
@@ -146,6 +148,25 @@ export default function App() {
               selectedStyle={selectedStyle}
               onStyleSelect={handleStyleSelect}
             />
+          )}
+
+          {photoFile && (
+            <div className="creativity-control">
+              <label className="control-label">Креативность:</label>
+              <div className="slider-container">
+                <span>0%</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={creativity}
+                  onChange={(e) => setCreativity(Number(e.target.value))}
+                  className="slider"
+                />
+                <span>100%</span>
+              </div>
+              <div className="creativity-value">{creativity}%</div>
+            </div>
           )}
 
           {photoFile && selectedStyle && (

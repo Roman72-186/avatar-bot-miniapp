@@ -51,7 +51,6 @@ export default function PhotoUpload({ onPhotoSelected }) {
       {!preview ? (
         <div
           className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
-          onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
@@ -59,11 +58,42 @@ export default function PhotoUpload({ onPhotoSelected }) {
           <div className="upload-icon">📸</div>
           <div className="upload-title">Загрузи своё фото</div>
           <div className="upload-hint">Лучше всего работает с портретным фото лица крупным планом</div>
+          
+          <div className="upload-buttons">
+            <button
+              className="upload-btn gallery-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                document.getElementById('gallery-input')?.click();
+              }}
+            >
+              📸 Галерея
+            </button>
+            
+            <button
+              className="upload-btn camera-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                document.getElementById('camera-input')?.click();
+              }}
+            >
+              📷 Камера
+            </button>
+          </div>
+          
           <input
-            ref={fileInputRef}
+            id="gallery-input"
             type="file"
             accept="image/*"
-            capture="user"
+            onChange={handleInputChange}
+            style={{ display: 'none' }}
+          />
+          
+          <input
+            id="camera-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
             onChange={handleInputChange}
             style={{ display: 'none' }}
           />

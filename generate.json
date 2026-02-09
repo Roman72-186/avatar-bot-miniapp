@@ -47,7 +47,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"image_url\": \"data:image/jpeg;base64,{{ $json.photo_base64 }}\",\n  \"prompt\": \"{{ $json.style }} style portrait, high quality, detailed\",\n  \"num_inference_steps\": 20,\n  \"guidance_scale\": 4.5,\n  \"instant_id_strength\": 0.7,\n  \"image_size\": \"square_hd\"\n}",
+        "jsonBody": "={\n  \"image_url\": \"data:image/jpeg;base64,{{ $json.photo_base64 }}\",\n  \"prompt\": \"{{ $json.style }} style portrait, high quality, detailed\",\n  \"num_inference_steps\": 20,\n  \"guidance_scale\": {{ 2 + ($json.creativity / 100) * 5.5 }},\n  \"instant_id_strength\": {{ 0.25 + ($json.creativity / 100) * 0.65 }},\n  \"image_size\": \"square_hd\"\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -122,6 +122,12 @@
               "name": "style",
               "value": "={{ $json.body.style }}",
               "type": "string"
+            },
+            {
+              "id": "e4b1c5f7-2d8a-4b2c-9f1e-5a6b7c8d9e0f",
+              "name": "creativity",
+              "value": "={{ typeof $json.body.creativity !== 'undefined' ? $json.body.creativity : 50 }}",
+              "type": "number"
             }
           ]
         },
@@ -163,6 +169,12 @@
               "name": "free_left",
               "value": "={{ $json.free_left }}",
               "type": "string"
+            },
+            {
+              "id": "e4b1c5f7-2d8a-4b2c-9f1e-5a6b7c8d9e0f",
+              "name": "creativity",
+              "value": "={{ $('Edit Fields').item.json.creativity }}",
+              "type": "number"
             }
           ]
         },
@@ -185,7 +197,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"image_url\": \"{{ $json.image_url }}\",\n  \"prompt\": \"{{ $json.style }} style portrait, high quality, detailed, vibrant colors\",\n  \"strength\": 0.75,\n  \"num_inference_steps\": 28,\n  \"guidance_scale\": 7.5,\n  \"image_size\": \"square_hd\"\n}",
+        "jsonBody": "={\n  \"image_url\": \"{{ $json.image_url }}\",\n  \"prompt\": \"{{ $json.style }} style portrait, high quality, detailed, vibrant colors\",\n  \"strength\": {{ 0.25 + ($json.creativity / 100) * 0.65 }},\n  \"num_inference_steps\": 28,\n  \"guidance_scale\": {{ 2 + ($json.creativity / 100) * 5.5 }},\n  \"image_size\": \"square_hd\"\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",

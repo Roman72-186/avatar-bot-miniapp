@@ -27,53 +27,70 @@ export async function apiRequest(endpoint, data = {}) {
 
 // Загрузка фото на fal.ai storage
 async function uploadToFal(file) {
-  // 1. Получаем upload URL
-  const initResponse = await fetch('https://rest.alpha.fal.ai/storage/upload/initiate', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Key ${FAL_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      file_name: file.name || 'photo.jpg',
-      content_type: file.type || 'image/jpeg',
-    }),
-  });
+  try {
+    // 1. Получаем upload URL
+    const initResponse = await fetch('https://rest.alpha.fal.ai/storage/upload/initiate', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Key ${FAL_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        file_name: file.name || 'photo.jpg',
+        content_type: file.type || 'image/jpeg',
+      }),
+    });
 
-  if (!initResponse.ok) {
-    throw new Error('Failed to initiate upload');
+    if (!initResponse.ok) {
+      throw new Error(`Stage: INIT_UPLOAD_URL, Error: Failed to initiate upload, status: ${initResponse.status}`);
+    }
+
+    const { file_url, upload_url } = await initResponse.json();
+
+    // 2. Загружаем файл
+    const uploadResponse = await fetch(upload_url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'image/jpeg',
+      },
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(`Stage: UPLOAD_FILE, Error: Failed to upload file to signed URL, status: ${uploadResponse.status}`);
+    }
+
+    return file_url;
+  } catch (error) {
+    if (error.message.includes('Stage:')) {
+      throw error; // Re-throw with our custom error message
+    }
+    throw new Error(`Stage: UPLOAD_PROCESS, Error: ${error.message}`);
   }
-
-  const { file_url, upload_url } = await initResponse.json();
-
-  // 2. Загружаем файл
-  const uploadResponse = await fetch(upload_url, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': file.type || 'image/jpeg',
-    },
-    body: file,
-  });
-
-  if (!uploadResponse.ok) {
-    throw new Error('Failed to upload file');
-  }
-
-  return file_url;
 }
 
 // Запрос генерации аватарки
-export async function generateAvatar(userId, file, style, initData) {
-  // 1. Загружаем фото на fal.ai
-  const imageUrl = await uploadToFal(file);
+export async function generateAvatar(userId, file, style, initData, creativity = 50) {
+  try {
+    // 1. Загружаем фото на fal.ai
+    const imageUrl = await uploadToFal(file);
 
-  // 2. Отправляем запрос на генерацию в n8n
-  return apiRequest('generate', {
-    user_id: userId,
-    image_url: imageUrl,
-    style: style,
-    init_data: initData,
-  });
+    // 2. Отправляем запрос на генерацию в n8n
+    const result = await apiRequest('generate', {
+      user_id: userId,
+      image_url: imageUrl,
+      style: style,
+      init_data: initData,
+      creativity: creativity,
+    });
+
+    return result;
+  } catch (error) {
+    if (error.message.includes('Stage:')) {
+      throw error; // Re-throw our custom upload errors
+    }
+    throw new Error(`Stage: N8N_WEBHOOK_CALL, Error: ${error.message}`);
+  }
 }
 
 // Получить статус пользователя (лимиты, баланс)
