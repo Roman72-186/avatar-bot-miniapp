@@ -79,7 +79,7 @@ export default function App() {
       if (imageUrl) {
         setResultImage(imageUrl);
         setScreen(SCREENS.RESULT);
-        hapticFeedback('success');
+        hapticFeedback('heavy');
       } else {
         throw new Error('No image in response');
       }
@@ -87,7 +87,7 @@ export default function App() {
       console.error('Generation failed:', e);
       setError(e.message || 'Что-то пошло не так. Попробуй ещё раз.');
       setScreen(SCREENS.ERROR);
-      hapticFeedback('error');
+      hapticFeedback('heavy');
     } finally {
       setIsLoading(false);
     }

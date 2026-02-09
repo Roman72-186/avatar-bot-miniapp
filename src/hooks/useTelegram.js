@@ -6,7 +6,6 @@ export function useTelegram() {
     if (tg) {
       tg.ready();
       tg.expand();
-      tg.enableClosingConfirmation();
     }
   };
 
@@ -19,29 +18,25 @@ export function useTelegram() {
   const themeParams = tg?.themeParams || {};
   const colorScheme = tg?.colorScheme || 'dark';
 
-  const showMainButton = (text, callback) => {
-    if (tg?.MainButton) {
-      tg.MainButton.text = text;
-      tg.MainButton.show();
-      tg.MainButton.onClick(callback);
-    }
-  };
-
-  const hideMainButton = () => {
-    if (tg?.MainButton) {
-      tg.MainButton.hide();
-    }
-  };
-
   const hapticFeedback = (type = 'medium') => {
-    if (tg?.HapticFeedback) {
-      tg.HapticFeedback.impactOccurred(type);
+    try {
+      const validTypes = ['light', 'medium', 'heavy'];
+      const safeType = validTypes.includes(type) ? type : 'medium';
+      if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred(safeType);
+      }
+    } catch (e) {
+      // ignore haptic errors
     }
   };
 
   const shareResult = (url, text) => {
-    if (tg) {
-      tg.switchInlineQuery(text || 'Сделай себе крутую аватарку! 🎨', ['users', 'groups']);
+    try {
+      if (tg) {
+        tg.switchInlineQuery(text || 'Сделай себе крутую аватарку! 🎨', ['users', 'groups']);
+      }
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -61,8 +56,6 @@ export function useTelegram() {
     themeParams,
     colorScheme,
     initTelegram,
-    showMainButton,
-    hideMainButton,
     hapticFeedback,
     shareResult,
     close,
