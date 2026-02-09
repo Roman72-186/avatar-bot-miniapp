@@ -38,7 +38,7 @@ export default function App() {
 
   const loadUserStatus = async () => {
     try {
-      const status = await getUserStatus(userId, initData);
+      const status = await getUserStatus(userId, initData, username);
       setFreeLeft(status.free_generations || 0);
     } catch (e) {
       console.error('Failed to load user status:', e);

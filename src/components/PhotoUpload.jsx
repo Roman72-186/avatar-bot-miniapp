@@ -93,7 +93,7 @@ export default function PhotoUpload({ onPhotoSelected }) {
             id="camera-input"
             type="file"
             accept="image/*"
-            capture="environment"
+            capture="user"
             onChange={handleInputChange}
             style={{ display: 'none' }}
           />

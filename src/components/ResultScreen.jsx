@@ -25,14 +25,12 @@ export default function ResultScreen({ imageUrl, style, onNewGeneration, debugIn
   const handleDownload = async () => {
     hapticFeedback('light');
     try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `avatar-${style}-${Date.now()}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // На Android Telegram WebView <a download> не работает — открываем ссылку
+      if (tg) {
+        tg.openLink(imageUrl);
+      } else {
+        window.open(imageUrl, '_blank');
+      }
     } catch (e) {
       window.open(imageUrl, '_blank');
     }
@@ -40,10 +38,10 @@ export default function ResultScreen({ imageUrl, style, onNewGeneration, debugIn
 
   const handleShare = () => {
     hapticFeedback('medium');
+    const botLink = 'https://t.me/those_are_the_gifts_bot';
     const shareText = `Смотри какую аватарку я сделал! 🎨 Попробуй тоже:`;
 
-    // Вызываем функцию шеринга с URL изображения и текстом
-    shareResult(imageUrl, shareText);
+    shareResult(botLink, shareText);
   };
 
   const handleNewGeneration = () => {

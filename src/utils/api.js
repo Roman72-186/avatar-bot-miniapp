@@ -225,9 +225,10 @@ export async function generateAvatar(userId, file, style, initData, creativity =
 }
 
 // Получить статус пользователя (лимиты, баланс)
-export async function getUserStatus(userId, initData) {
+export async function getUserStatus(userId, initData, username) {
   return apiRequest('user-status', {
     user_id: userId,
+    username: username || '',
     init_data: initData,
   });
 }
