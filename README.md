@@ -12,7 +12,7 @@ Telegram Mini App для генерации AI-аватарок из фото п
 
 ## Быстрый старт
 
-### 1. Клонирование и установка
+### 1. Клонирование и установка!
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/avatar-bot-miniapp.git
