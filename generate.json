@@ -31,7 +31,7 @@
             {
               "id": "ada6641f-0088-43ac-adee-59b15b4dab25",
               "name": "image_url",
-              "value": "={{ $json.body.image_url }}",
+              "value": "={{ $json.body.image_url || '' }}",
               "type": "string"
             },
             {
@@ -51,6 +51,18 @@
               "name": "photo_base64",
               "value": "={{ $json.body.photo_base64 }}",
               "type": "string"
+            },
+            {
+              "id": "debug_has_image_url",
+              "name": "debug_has_image_url",
+              "value": "={{ !!$json.body.image_url }}",
+              "type": "boolean"
+            },
+            {
+              "id": "debug_has_photo_base64",
+              "name": "debug_has_photo_base64",
+              "value": "={{ !!$json.body.photo_base64 }}",
+              "type": "boolean"
             }
           ]
         },
@@ -71,23 +83,24 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "operator": {
-              "string": {
-                "isEmpty": false
-              }
-            }
+            "typeValidation": "strict",
+            "version": 2
           },
           "conditions": [
             {
               "id": "condition-1",
-              "leftValue": "={{ $json.image_url }}",
+              "leftValue": "={{ String($json.image_url || '').trim() }}",
               "rightValue": "",
-              "operator": "notEquals"
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
         },
-        "defaultOutput": "output_1",
+        "defaultOutput": "output_2",
         "outputs": 2
       },
       "type": "n8n-nodes-base.if",
@@ -128,12 +141,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://fal.run/fal-ai/face-to-sticker",
+        "url": "https://fal.run/fal-ai/flux/dev/image-to-image",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"image_url\": \"data:image/jpeg;base64,{{ $json.photo_base64 }}\",\n  \"prompt\": \"{{ $json.style }} style portrait, high quality, detailed\",\n  \"num_inference_steps\": 20,\n  \"guidance_scale\": {{ 2 + ($json.creativity / 100) * 5.5 }},\n  \"instant_id_strength\": {{ 0.25 + ($json.creativity / 100) * 0.65 }},\n  \"image_size\": \"square_hd\"\n}",
+        "jsonBody": "={\n  \"image_url\": \"data:image/jpeg;base64,{{ $json.photo_base64 }}\",\n  \"prompt\": \"{{ $json.style }} style portrait, high quality, detailed, vibrant colors\",\n  \"strength\": {{ 0.25 + ($json.creativity / 100) * 0.65 }},\n  \"num_inference_steps\": 28,\n  \"guidance_scale\": {{ 2 + ($json.creativity / 100) * 5.5 }},\n  \"image_size\": \"square_hd\"\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -154,13 +167,13 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO users (id, created_at)\nVALUES ({{ $('Extract Input Data').item.json.user_id }}, NOW())\nON CONFLICT (id) DO NOTHING;\n\nUPDATE users \nSET free_generations = free_generations - 1 \nWHERE id = {{ $('Extract Input Data').item.json.user_id }} \nAND free_generations > 0;\n\nINSERT INTO generations (user_id, style, file_path, created_at)\nVALUES (\n  {{ $('Extract Input Data').item.json.user_id }},\n  '{{ $('Extract Input Data').item.json.style }}',\n  '{{ $json.images[0].url }}',\n  NOW()\n);",
+        "query": "INSERT INTO users (id, created_at)\nVALUES ({{ $node[\"generate\"].json.body.user_id }}, NOW())\nON CONFLICT (id) DO NOTHING;\n\nUPDATE users \nSET free_generations = free_generations - 1 \nWHERE id = {{ $node[\"generate\"].json.body.user_id }} \nAND free_generations > 0;\n\nINSERT INTO generations (user_id, style, file_path, created_at)\nVALUES (\n  {{ $node[\"generate\"].json.body.user_id }},\n  '{{ $node[\"generate\"].json.body.style }}',\n  '{{ $json.images[0].url }}',\n  NOW()\n);",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -176,
+        48,
         96
       ],
       "id": "c9726a4e-1056-4458-9a34-3b687ca49ee7",
@@ -181,7 +194,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        -16,
+        -176,
         96
       ],
       "id": "1e96d7cd-d952-4a8d-9262-986aa9cd20c7",
@@ -234,7 +247,7 @@
       "main": [
         [
           {
-            "node": "Execute SQL Query - Both Paths",
+            "node": "Respond to Webhook",
             "type": "main",
             "index": 0
           }
@@ -245,18 +258,18 @@
       "main": [
         [
           {
-            "node": "Execute SQL Query - Both Paths",
+            "node": "Respond to Webhook",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Execute SQL Query - Both Paths": {
+    "Respond to Webhook": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Execute SQL Query - Both Paths",
             "type": "main",
             "index": 0
           }

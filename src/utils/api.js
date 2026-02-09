@@ -4,7 +4,10 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'https://n8n.creativeanalytic.
 // fal.ai credentials
 const FAL_KEY = '0945b3eb-a693-44de-a7cb-85d3a8a1a437:6391f113a7c37f4da6a2e1ebda28d7bd';
 
-export async function apiRequest(endpoint, data = {}) {
+export async function apiRequest(endpoint, data = {}, timeoutMs = 60000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const response = await fetch(`${API_BASE}/${endpoint}`, {
       method: 'POST',
@@ -12,6 +15,7 @@ export async function apiRequest(endpoint, data = {}) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -20,8 +24,13 @@ export async function apiRequest(endpoint, data = {}) {
 
     return await response.json();
   } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Stage: TIMEOUT, Error: Сервер не ответил за 60 секунд. Попробуйте ещё раз.');
+    }
     console.error('API request failed:', error);
     throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -69,6 +78,42 @@ async function uploadToFal(file) {
   }
 }
 
+// Сжатие изображения через canvas
+function compressImage(file, maxWidth = 1024, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg' }));
+          } else {
+            resolve(file);
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 // Конвертация файла в base64
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -82,33 +127,30 @@ function fileToBase64(file) {
 // Запрос генерации аватарки
 export async function generateAvatar(userId, file, style, initData, creativity = 50) {
   try {
+    // 0. Сжимаем изображение
+    const compressedFile = await compressImage(file);
+
     // 1. Пробуем загрузить фото на fal.ai
     let imageUrl;
     let useFallback = false;
-    
+
     try {
-      imageUrl = await uploadToFal(file);
+      imageUrl = await uploadToFal(compressedFile);
     } catch (uploadError) {
       // Check if it's a network error (Failed to fetch) that could benefit from fallback
-      if (uploadError.message.includes('Stage: UPLOAD_PROCESS') &&
-          uploadError.message.includes('Failed to fetch')) {
-        console.warn('Fal upload failed, using fallback method with base64:', uploadError.message);
-        useFallback = true;
-      } else {
-        // Re-throw non-network related upload errors
-        throw uploadError;
-      }
+      console.warn('Fal upload failed, using fallback method with base64:', uploadError.message);
+      useFallback = true;
     }
 
     let requestData;
     if (useFallback) {
       // Prepare fallback data with base64
-      const photoBase64 = await fileToBase64(file);
+      const photoBase64 = await fileToBase64(compressedFile);
       requestData = {
         user_id: userId,
         photo_base64: photoBase64,
-        mime_type: file.type || 'image/jpeg',
-        file_name: file.name || 'photo.jpg',
+        mime_type: compressedFile.type || 'image/jpeg',
+        file_name: compressedFile.name || 'photo.jpg',
         style: style,
         init_data: initData,
         creativity: creativity,
