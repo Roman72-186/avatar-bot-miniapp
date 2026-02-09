@@ -80,12 +80,15 @@ export default function App() {
       const data = Array.isArray(result) ? result[0] : result;
       const imageUrl = data?.image_url || data?.images?.[0]?.url;
 
+      // DEBUG: временный лог для диагностики
+      setDebugStep(`Response: ${JSON.stringify(result).slice(0, 200)} | imageUrl: ${imageUrl}`);
+
       if (imageUrl) {
         setResultImage(imageUrl);
         setScreen(SCREENS.RESULT);
         hapticFeedback('heavy');
       } else {
-        throw new Error('No image in response');
+        throw new Error(`No image in response. Keys: ${Object.keys(data || {}).join(',')}`);
       }
     } catch (e) {
       console.error('Generation failed:', e);
@@ -120,6 +123,7 @@ export default function App() {
           imageUrl={resultImage}
           style={selectedStyle}
           onNewGeneration={handleNewGeneration}
+          debugInfo={debugStep}
         />
       )}
 

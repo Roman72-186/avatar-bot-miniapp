@@ -1,6 +1,6 @@
 import { useTelegram } from '../hooks/useTelegram';
 
-export default function ResultScreen({ imageUrl, style, onNewGeneration }) {
+export default function ResultScreen({ imageUrl, style, onNewGeneration, debugInfo }) {
   const { hapticFeedback, tg, shareResult } = useTelegram();
 
   const handleDownload = async () => {
@@ -49,6 +49,11 @@ export default function ResultScreen({ imageUrl, style, onNewGeneration }) {
       <button className="new-generation-btn" onClick={handleNewGeneration}>
         🔄 Создать ещё
       </button>
+      {debugInfo && (
+        <div style={{ marginTop: 8, fontSize: 10, color: '#888', wordBreak: 'break-all', padding: '0 12px', maxHeight: 80, overflow: 'auto' }}>
+          {debugInfo}
+        </div>
+      )}
     </div>
   );
 }
