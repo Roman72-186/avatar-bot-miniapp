@@ -1,7 +1,26 @@
+import { useState, useEffect } from 'react';
 import { useTelegram } from '../hooks/useTelegram';
 
 export default function ResultScreen({ imageUrl, style, onNewGeneration, debugInfo }) {
   const { hapticFeedback, tg, shareResult } = useTelegram();
+  const [displayUrl, setDisplayUrl] = useState(null);
+  const [imgError, setImgError] = useState(null);
+
+  useEffect(() => {
+    if (!imageUrl) return;
+    // Загружаем изображение через fetch и создаём blob URL
+    // чтобы обойти ограничения Telegram WebView на внешние домены
+    fetch(imageUrl)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      })
+      .then(blob => setDisplayUrl(URL.createObjectURL(blob)))
+      .catch(e => {
+        setImgError(e.message);
+        setDisplayUrl(imageUrl); // fallback — попробуем напрямую
+      });
+  }, [imageUrl]);
 
   const handleDownload = async () => {
     hapticFeedback('light');
@@ -36,7 +55,14 @@ export default function ResultScreen({ imageUrl, style, onNewGeneration, debugIn
     <div className="result-screen">
       <h2 className="result-title">Готово! 🎉</h2>
       <div className="result-image-container">
-        <img src={imageUrl} alt="Generated avatar" className="result-image" />
+        {displayUrl ? (
+          <img src={displayUrl} alt="Generated avatar" className="result-image" />
+        ) : (
+          <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Загрузка изображения...</div>
+        )}
+        {imgError && (
+          <div style={{ fontSize: 10, color: '#c33', textAlign: 'center' }}>fetch error: {imgError}</div>
+        )}
       </div>
       <div className="result-actions">
         <button className="action-btn primary" onClick={handleDownload}>
