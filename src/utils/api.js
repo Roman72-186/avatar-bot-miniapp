@@ -69,20 +69,63 @@ async function uploadToFal(file) {
   }
 }
 
+// Конвертация файла в base64
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(',')[1]); // Extract base64 part
+    reader.onerror = error => reject(error);
+  });
+}
+
 // Запрос генерации аватарки
 export async function generateAvatar(userId, file, style, initData, creativity = 50) {
   try {
-    // 1. Загружаем фото на fal.ai
-    const imageUrl = await uploadToFal(file);
+    // 1. Пробуем загрузить фото на fal.ai
+    let imageUrl;
+    let useFallback = false;
+    
+    try {
+      imageUrl = await uploadToFal(file);
+    } catch (uploadError) {
+      // Check if it's a network error (Failed to fetch) that could benefit from fallback
+      if (uploadError.message.includes('Stage: UPLOAD_PROCESS') &&
+          uploadError.message.includes('Failed to fetch')) {
+        console.warn('Fal upload failed, using fallback method with base64:', uploadError.message);
+        useFallback = true;
+      } else {
+        // Re-throw non-network related upload errors
+        throw uploadError;
+      }
+    }
+
+    let requestData;
+    if (useFallback) {
+      // Prepare fallback data with base64
+      const photoBase64 = await fileToBase64(file);
+      requestData = {
+        user_id: userId,
+        photo_base64: photoBase64,
+        mime_type: file.type || 'image/jpeg',
+        file_name: file.name || 'photo.jpg',
+        style: style,
+        init_data: initData,
+        creativity: creativity,
+      };
+    } else {
+      // Original flow with image URL
+      requestData = {
+        user_id: userId,
+        image_url: imageUrl,
+        style: style,
+        init_data: initData,
+        creativity: creativity,
+      };
+    }
 
     // 2. Отправляем запрос на генерацию в n8n
-    const result = await apiRequest('generate', {
-      user_id: userId,
-      image_url: imageUrl,
-      style: style,
-      init_data: initData,
-      creativity: creativity,
-    });
+    const result = await apiRequest('generate', requestData);
 
     return result;
   } catch (error) {
