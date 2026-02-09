@@ -71,10 +71,11 @@ async function uploadToFal(file) {
 
     return file_url;
   } catch (error) {
-    if (error.message.includes('Stage:')) {
-      throw error; // Re-throw with our custom error message
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) {
+      throw error;
     }
-    throw new Error(`Stage: UPLOAD_PROCESS, Error: ${error.message}`);
+    throw new Error(`Stage: UPLOAD_PROCESS, Error: ${msg}`);
   }
 }
 
@@ -171,10 +172,11 @@ export async function generateAvatar(userId, file, style, initData, creativity =
 
     return result;
   } catch (error) {
-    if (error.message.includes('Stage:')) {
-      throw error; // Re-throw our custom upload errors
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) {
+      throw error;
     }
-    throw new Error(`Stage: N8N_WEBHOOK_CALL, Error: ${error.message}`);
+    throw new Error(`Stage: N8N_WEBHOOK_CALL, Error: ${msg}`);
   }
 }
 
