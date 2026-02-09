@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { uploadPhoto, generateAvatar, getUserStatus } from './utils/api';
+import { generateAvatar, getUserStatus } from './utils/api';
 import { STYLES } from './utils/styles';
 import PhotoUpload from './components/PhotoUpload';
 import StyleSelector from './components/StyleSelector';
@@ -8,7 +8,6 @@ import GenerateButton from './components/GenerateButton';
 import LoadingScreen from './components/LoadingScreen';
 import ResultScreen from './components/ResultScreen';
 
-// Экраны приложения
 const SCREENS = {
   MAIN: 'main',
   LOADING: 'loading',
@@ -28,7 +27,6 @@ export default function App() {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Инициализация
   useEffect(() => {
     initTelegram();
     if (userId) {
@@ -36,32 +34,27 @@ export default function App() {
     }
   }, [userId]);
 
-  // Загрузка статуса пользователя
   const loadUserStatus = async () => {
     try {
       const status = await getUserStatus(userId, initData);
       setFreeLeft(status.free_generations || 0);
     } catch (e) {
       console.error('Failed to load user status:', e);
-      // По умолчанию даём 3 бесплатные генерации
       setFreeLeft(3);
     }
   };
 
-  // Обработка выбора фото
   const handlePhotoSelected = (file, preview) => {
     setPhotoFile(file);
     setPhotoPreview(preview);
     hapticFeedback('light');
   };
 
-  // Обработка выбора стиля
   const handleStyleSelect = (styleId) => {
     setSelectedStyle(styleId);
     hapticFeedback('light');
   };
 
-  // Генерация аватарки
   const handleGenerate = async () => {
     if (!photoFile || !selectedStyle) return;
 
@@ -71,26 +64,24 @@ export default function App() {
     hapticFeedback('medium');
 
     try {
-      // 1. Загружаем фото
-      const uploadResult = await uploadPhoto(photoFile, userId);
-
-      // 2. Запрашиваем генерацию
+      // Отправляем файл — api.js загрузит на fal.ai и вызовет n8n
       const result = await generateAvatar(
         userId,
-        uploadResult.photo_url,
+        photoFile,
         selectedStyle,
         initData
       );
 
-      if (result.image_url) {
-        setResultImage(result.image_url);
+      // Результат из n8n (All Incoming Items от SQL)
+      // Картинка будет в result.images[0].url или в массиве
+      const imageUrl = Array.isArray(result) 
+        ? result[0]?.images?.[0]?.url 
+        : result?.images?.[0]?.url;
+
+      if (imageUrl) {
+        setResultImage(imageUrl);
         setScreen(SCREENS.RESULT);
         hapticFeedback('success');
-
-        // Обновляем лимиты
-        if (result.free_left !== undefined) {
-          setFreeLeft(result.free_left);
-        }
       } else {
         throw new Error('No image in response');
       }
@@ -104,7 +95,6 @@ export default function App() {
     }
   };
 
-  // Новая генерация
   const handleNewGeneration = () => {
     setScreen(SCREENS.MAIN);
     setResultImage(null);
@@ -115,11 +105,9 @@ export default function App() {
   };
 
   const canGenerate = photoFile && selectedStyle;
-  const currentStyle = STYLES.find((s) => s.id === selectedStyle);
 
   return (
     <div className="app">
-      {/* Фоновые элементы */}
       <div className="bg-gradient"></div>
       <div className="bg-noise"></div>
 
