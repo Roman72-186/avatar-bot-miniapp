@@ -33,10 +33,25 @@ export function useTelegram() {
   const shareResult = (url, text) => {
     try {
       if (tg) {
-        tg.switchInlineQuery(text || 'Сделай себе крутую аватарку! 🎨', ['users', 'groups']);
+        // Используем Telegram WebApp API для открытия окна шеринга
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+        tg.openTelegramLink(shareUrl);
+      } else {
+        // Fallback для веб-браузера - используем Web Share API если доступна
+        if (navigator.share) {
+          navigator.share({
+            title: 'Моя аватарка',
+            text: text,
+            url: url
+          });
+        } else {
+          // Альтернатива - копируем ссылку в буфер обмена
+          navigator.clipboard?.writeText(`${text}\n${url}`);
+        }
       }
     } catch (e) {
-      // ignore
+      // Если все способы не работают, копируем в буфер обмена
+      navigator.clipboard?.writeText(`${text}\n${url}`);
     }
   };
 

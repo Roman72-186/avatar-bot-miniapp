@@ -1,7 +1,7 @@
 import { useTelegram } from '../hooks/useTelegram';
 
 export default function ResultScreen({ imageUrl, style, onNewGeneration }) {
-  const { hapticFeedback, tg } = useTelegram();
+  const { hapticFeedback, tg, shareResult } = useTelegram();
 
   const handleDownload = async () => {
     hapticFeedback('light');
@@ -21,16 +21,10 @@ export default function ResultScreen({ imageUrl, style, onNewGeneration }) {
 
   const handleShare = () => {
     hapticFeedback('medium');
-    const botUsername = 'those_are_the_gifts_bot';
-    const shareText = `Смотри какую аватарку я сделал! 🎨 Попробуй тоже: https://t.me/${botUsername}`;
+    const shareText = `Смотри какую аватарку я сделал! 🎨 Попробуй тоже:`;
 
-    if (tg) {
-      // Отправляем через Telegram
-      tg.switchInlineQuery('Сделай крутую аватарку! 🎨', ['users', 'groups']);
-    } else {
-      // Fallback
-      navigator.clipboard?.writeText(shareText);
-    }
+    // Вызываем функцию шеринга с URL изображения и текстом
+    shareResult(imageUrl, shareText);
   };
 
   const handleNewGeneration = () => {
