@@ -72,11 +72,9 @@ export default function App() {
         initData
       );
 
-      // Результат из n8n (All Incoming Items от SQL)
-      // Картинка будет в result.images[0].url или в массиве
-      const imageUrl = Array.isArray(result) 
-        ? result[0]?.images?.[0]?.url 
-        : result?.images?.[0]?.url;
+      // Парсим ответ от n8n
+      const data = Array.isArray(result) ? result[0] : result;
+      const imageUrl = data?.image_url || data?.images?.[0]?.url;
 
       if (imageUrl) {
         setResultImage(imageUrl);
