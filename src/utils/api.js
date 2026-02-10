@@ -224,6 +224,11 @@ export async function generateAvatar(userId, file, style, initData, creativity =
   }
 }
 
+// Создать инвойс для оплаты звёздами
+export async function createInvoice(userId, starCount) {
+  return apiRequest('create-invoice', { user_id: userId, star_count: starCount });
+}
+
 // Получить статус пользователя (лимиты, баланс)
 export async function getUserStatus(userId, initData, username) {
   return apiRequest('user-status', {

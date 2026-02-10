@@ -55,6 +55,16 @@ export function useTelegram() {
     }
   };
 
+  const openInvoice = (invoiceLink) => {
+    return new Promise((resolve) => {
+      if (tg?.openInvoice) {
+        tg.openInvoice(invoiceLink, (status) => resolve(status));
+      } else {
+        resolve('failed');
+      }
+    });
+  };
+
   const close = () => {
     if (tg) {
       tg.close();
@@ -73,6 +83,7 @@ export function useTelegram() {
     initTelegram,
     hapticFeedback,
     shareResult,
+    openInvoice,
     close,
   };
 }

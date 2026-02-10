@@ -54,5 +54,4 @@ export const GENERATION_DEFAULTS = {
 
 // Лимиты
 export const FREE_GENERATIONS_PER_DAY = 3;
-export const STARS_PER_GENERATION = 1;
-export const STARS_PACK_10 = 15;
+export const STARS_PER_GENERATION = 5;

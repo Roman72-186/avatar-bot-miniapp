@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash($body = Get-Content -Raw \"c:\\\\Users\\\\User\\\\Desktop\\\\Project\\\\avatar-bot-miniapp\\\\n8n_payment_handler.json\")",
+      "Bash($headers = @{\"X-N8N-API-KEY\"=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YjlmMzhmMC0wZGZlLTQwNGEtYTY3Ny1iYTU0MGJiZjUwYzEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzcwNjUwNzk0LCJleHAiOjE3NzMyMDE2MDB9.UVG3WEUUhsglQ8h4SZ92jp1JzTcJ_UQYiSp6r0Fk7jY\")",
+      "Bash(\"Content-Type\"=\"application/json\"})",
+      "Bash(Invoke-RestMethod -Uri \"https://n8n.creativeanalytic.ru/api/v1/workflows\" -Method POST -Headers $headers -Body $body)",
+      "Bash(ConvertTo-Json -Depth 10)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

@@ -663,3 +663,162 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* === Balance & Top-up === */
+.balance-info {
+  text-align: center;
+  margin-top: 12px;
+}
+
+.star-balance {
+  color: var(--text-hint);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.star-balance strong {
+  color: #FFD700;
+}
+
+.cost-hint {
+  opacity: 0.7;
+}
+
+.topup-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px;
+  border: 2px solid #FFD700;
+  border-radius: var(--radius-md);
+  background: rgba(255, 215, 0, 0.1);
+  color: #FFD700;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.topup-btn:active {
+  transform: scale(0.97);
+}
+
+/* === Modal === */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+
+.modal h3 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.modal-balance {
+  color: var(--text-hint);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.modal-balance strong {
+  color: #FFD700;
+}
+
+.topup-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.topup-option {
+  padding: 10px 4px;
+  border: 2px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.topup-option.selected {
+  border-color: #FFD700;
+  background: rgba(255, 215, 0, 0.1);
+  color: #FFD700;
+}
+
+.topup-option:active {
+  transform: scale(0.95);
+}
+
+.topup-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  text-align: center;
+  margin-bottom: 16px;
+  outline: none;
+}
+
+.topup-input:focus {
+  border-color: var(--accent);
+}
+
+.topup-confirm-btn {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #000;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.topup-confirm-btn:active {
+  transform: scale(0.97);
+}
+
+.modal-close-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-hint);
+  font-family: var(--font-body);
+  font-size: 14px;
+  cursor: pointer;
+}

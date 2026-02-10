@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus } from './utils/api';
-import { STYLES } from './utils/styles';
+import { generateAvatar, getUserStatus, createInvoice } from './utils/api';
+import { STYLES, STARS_PER_GENERATION } from './utils/styles';
 import PhotoUpload from './components/PhotoUpload';
 import StyleSelector from './components/StyleSelector';
 import GenerateButton from './components/GenerateButton';
@@ -16,7 +16,7 @@ const SCREENS = {
 };
 
 export default function App() {
-  const { initTelegram, userId, username, initData, hapticFeedback, startParam } = useTelegram();
+  const { initTelegram, userId, username, initData, hapticFeedback, openInvoice, startParam } = useTelegram();
 
   const [screen, setScreen] = useState(SCREENS.MAIN);
   const [photoFile, setPhotoFile] = useState(null);
@@ -24,6 +24,9 @@ export default function App() {
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [resultImage, setResultImage] = useState(null);
   const [freeLeft, setFreeLeft] = useState(null);
+  const [starBalance, setStarBalance] = useState(0);
+  const [showTopUp, setShowTopUp] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState(50);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [creativity, setCreativity] = useState(50);
@@ -39,7 +42,8 @@ export default function App() {
   const loadUserStatus = async () => {
     try {
       const status = await getUserStatus(userId, initData, username);
-      setFreeLeft(status.free_generations || 0);
+      setFreeLeft(status.free_left ?? status.free_generations ?? 0);
+      setStarBalance(status.star_balance || 0);
     } catch (e) {
       console.error('Failed to load user status:', e);
       setFreeLeft(3);
@@ -55,6 +59,20 @@ export default function App() {
   const handleStyleSelect = (styleId) => {
     setSelectedStyle(styleId);
     hapticFeedback('light');
+  };
+
+  const handleTopUp = async (amount) => {
+    try {
+      const { invoice_link } = await createInvoice(userId, amount || topUpAmount);
+      const status = await openInvoice(invoice_link);
+      if (status === 'paid') {
+        hapticFeedback('heavy');
+        await loadUserStatus();
+        setShowTopUp(false);
+      }
+    } catch (e) {
+      console.error('Top-up failed:', e);
+    }
   };
 
   const handleGenerate = async () => {
@@ -83,10 +101,17 @@ export default function App() {
       // DEBUG: временный лог для диагностики
       setDebugStep(`Response: ${JSON.stringify(result).slice(0, 200)} | imageUrl: ${imageUrl}`);
 
+      if (data?.error === 'insufficient_balance') {
+        setScreen(SCREENS.MAIN);
+        setShowTopUp(true);
+        return;
+      }
+
       if (imageUrl) {
         setResultImage(imageUrl);
         setScreen(SCREENS.RESULT);
         hapticFeedback('heavy');
+        await loadUserStatus();
       } else {
         throw new Error(`No image in response. Keys: ${Object.keys(data || {}).join(',')}`);
       }
@@ -179,10 +204,46 @@ export default function App() {
             <GenerateButton
               canGenerate={canGenerate}
               freeLeft={freeLeft}
+              starBalance={starBalance}
               isLoading={isLoading}
               onClick={handleGenerate}
+              onTopUp={() => setShowTopUp(true)}
             />
           )}
+        </div>
+      )}
+
+      {showTopUp && (
+        <div className="modal-overlay" onClick={() => setShowTopUp(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Пополнить баланс</h3>
+            <p className="modal-balance">Текущий баланс: <strong>{starBalance} ⭐</strong></p>
+            <div className="topup-options">
+              {[10, 25, 50, 100].map((amount) => (
+                <button
+                  key={amount}
+                  className={`topup-option ${topUpAmount === amount ? 'selected' : ''}`}
+                  onClick={() => setTopUpAmount(amount)}
+                >
+                  {amount} ⭐
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              className="topup-input"
+              min="1"
+              value={topUpAmount}
+              onChange={(e) => setTopUpAmount(Math.max(1, Number(e.target.value)))}
+              placeholder="Своё количество"
+            />
+            <button className="topup-confirm-btn" onClick={() => handleTopUp()}>
+              Оплатить {topUpAmount} ⭐
+            </button>
+            <button className="modal-close-btn" onClick={() => setShowTopUp(false)}>
+              Отмена
+            </button>
+          </div>
         </div>
       )}
     </div>
