@@ -41,7 +41,8 @@ export default function App() {
 
   const loadUserStatus = async () => {
     try {
-      const status = await getUserStatus(userId, initData, username);
+      const result = await getUserStatus(userId, initData, username);
+      const status = Array.isArray(result) ? result[0] : result;
       setFreeLeft(status.free_left ?? status.free_generations ?? 0);
       setStarBalance(status.star_balance || 0);
     } catch (e) {
