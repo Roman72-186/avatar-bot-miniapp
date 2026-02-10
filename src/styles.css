@@ -120,6 +120,34 @@ body {
   font-weight: 400;
 }
 
+.header-balance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.header-free {
+  color: var(--text-hint);
+}
+
+.header-stars {
+  color: #FFD700;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.header-stars:active {
+  transform: scale(0.95);
+}
+
 /* === Section Title === */
 .section-title {
   font-family: var(--font-display);

@@ -171,6 +171,16 @@ export default function App() {
               <span className="title-accent">AI</span> Аватарки
             </h1>
             <p className="app-subtitle">Преврати своё фото в арт за секунды</p>
+            {freeLeft !== null && (
+              <div className="header-balance">
+                <span className="header-free">
+                  {freeLeft > 0 ? `${freeLeft} бесплатных` : 'Бесплатные закончились'}
+                </span>
+                <span className="header-stars" onClick={() => setShowTopUp(true)}>
+                  ⭐ {starBalance || 0}
+                </span>
+              </div>
+            )}
           </header>
 
           <PhotoUpload onPhotoSelected={handlePhotoSelected} />
