@@ -35,7 +35,7 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000) {
 }
 
 // Загрузка фото на fal.ai storage (таймаут 15 сек)
-async function uploadToFal(file) {
+export async function uploadToFal(file) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
 
@@ -87,7 +87,7 @@ async function uploadToFal(file) {
 }
 
 // Сжатие изображения через canvas
-function compressImage(file, maxWidth = 1024, quality = 0.8) {
+export function compressImage(file, maxWidth = 1024, quality = 0.8) {
   return new Promise((resolve) => {
     try {
       const img = new Image();
@@ -236,4 +236,103 @@ export async function getUserStatus(userId, initData, username) {
     username: username || '',
     init_data: initData,
   });
+}
+
+// Загрузка нескольких файлов на fal.ai параллельно
+export async function uploadMultipleToFal(files) {
+  return Promise.all(files.map((f) => uploadToFal(f)));
+}
+
+// Генерация из нескольких фото + промпт (fal-ai/flux-2-pro/edit)
+export async function generateMultiPhoto(userId, files, prompt, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+
+  try {
+    step(`[1/4] Сжатие ${files.length} фото...`);
+    const compressed = await Promise.all(files.map((f) => compressImage(f)));
+
+    step(`[2/4] Загрузка ${compressed.length} фото на fal.ai...`);
+    const imageUrls = await uploadMultipleToFal(compressed);
+
+    step('[3/4] Все фото загружены. Отправка на генерацию...');
+    const requestData = {
+      user_id: userId,
+      mode: 'multi_photo',
+      image_urls: imageUrls,
+      prompt,
+      init_data: initData,
+    };
+
+    step('[4/4] Ожидание генерации от AI...');
+    return await apiRequest('generate-multi', requestData, 120000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: MULTI_PHOTO, Error: ${msg}`);
+  }
+}
+
+// Генерация по референсу (fal-ai/image-apps-v2/style-transfer)
+export async function generateStyleTransfer(userId, mainFile, refFile, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+
+  try {
+    step('[1/4] Сжатие фотографий...');
+    const [compressedMain, compressedRef] = await Promise.all([
+      compressImage(mainFile),
+      compressImage(refFile),
+    ]);
+
+    step('[2/4] Загрузка фото на fal.ai...');
+    const [mainUrl, refUrl] = await Promise.all([
+      uploadToFal(compressedMain),
+      uploadToFal(compressedRef),
+    ]);
+
+    step('[3/4] Фото загружены. Отправка на генерацию...');
+    const requestData = {
+      user_id: userId,
+      mode: 'style_transfer',
+      image_url: mainUrl,
+      style_reference_image_url: refUrl,
+      init_data: initData,
+    };
+
+    step('[4/4] Ожидание генерации от AI...');
+    return await apiRequest('generate-style-transfer', requestData, 120000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: STYLE_TRANSFER, Error: ${msg}`);
+  }
+}
+
+// Генерация видео из фото + промпт (fal-ai/minimax/hailuo-2.3)
+export async function generateVideo(userId, file, prompt, duration, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+
+  try {
+    step('[1/4] Сжатие фото...');
+    const compressedFile = await compressImage(file);
+
+    step('[2/4] Загрузка фото на fal.ai...');
+    const imageUrl = await uploadToFal(compressedFile);
+
+    step('[3/4] Фото загружено. Отправка на генерацию видео...');
+    const requestData = {
+      user_id: userId,
+      mode: 'photo_to_video',
+      image_url: imageUrl,
+      prompt,
+      duration: String(duration),
+      init_data: initData,
+    };
+
+    step('[4/4] Генерация видео (может занять 1–3 минуты)...');
+    return await apiRequest('generate-video', requestData, 300000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: VIDEO_GEN, Error: ${msg}`);
+  }
 }

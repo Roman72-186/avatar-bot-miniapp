@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice } from './utils/api';
+import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo } from './utils/api';
 import { STYLES, STARS_PER_GENERATION } from './utils/styles';
+import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
 import PhotoUpload from './components/PhotoUpload';
 import StyleSelector from './components/StyleSelector';
 import GenerateButton from './components/GenerateButton';
 import LoadingScreen from './components/LoadingScreen';
 import ResultScreen from './components/ResultScreen';
+import ModeSelector from './components/ModeSelector';
+import MultiPhotoUpload from './components/MultiPhotoUpload';
+import ReferencePhotoUpload from './components/ReferencePhotoUpload';
+import PromptInput from './components/PromptInput';
+import DurationSelector from './components/DurationSelector';
 
 const SCREENS = {
   MAIN: 'main',
@@ -31,6 +37,16 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [creativity, setCreativity] = useState(50);
   const [debugStep, setDebugStep] = useState(null);
+
+  // New mode state
+  const [mode, setMode] = useState(DEFAULT_MODE);
+  const [photos, setPhotos] = useState([null, null, null, null]);
+  const [referenceFile, setReferenceFile] = useState(null);
+  const [referencePreview, setReferencePreview] = useState(null);
+  const [promptText, setPromptText] = useState('');
+  const [videoDuration, setVideoDuration] = useState('6');
+  const [resultType, setResultType] = useState('image');
+  const [resultVideo, setResultVideo] = useState(null);
 
   useEffect(() => {
     initTelegram();
@@ -57,8 +73,28 @@ export default function App() {
     hapticFeedback('light');
   };
 
+  const handleReferenceSelected = (file, preview) => {
+    setReferenceFile(file);
+    setReferencePreview(preview);
+    hapticFeedback('light');
+  };
+
   const handleStyleSelect = (styleId) => {
     setSelectedStyle(styleId);
+    hapticFeedback('light');
+  };
+
+  const handleModeSelect = (newMode) => {
+    if (newMode === mode) return;
+    setMode(newMode);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setSelectedStyle(null);
+    setPhotos([null, null, null, null]);
+    setReferenceFile(null);
+    setReferencePreview(null);
+    setPromptText('');
+    setVideoDuration('6');
     hapticFeedback('light');
   };
 
@@ -76,31 +112,66 @@ export default function App() {
     }
   };
 
+  // Compute canGenerate based on mode
+  const currentMode = MODES[mode];
+  const starCost = getStarCost(mode, { duration: videoDuration });
+  let canGenerate = false;
+  switch (mode) {
+    case 'stylize':
+      canGenerate = !!(photoFile && selectedStyle);
+      break;
+    case 'multi_photo':
+      canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 2) && promptText.trim().length > 0;
+      break;
+    case 'style_transfer':
+      canGenerate = !!(photoFile && referenceFile);
+      break;
+    case 'photo_to_video':
+      canGenerate = !!(photoFile && promptText.trim().length > 0);
+      break;
+  }
+
   const handleGenerate = async () => {
-    if (!photoFile || !selectedStyle) return;
+    if (!canGenerate) return;
+
+    const hasFree = currentMode.hasFree && freeLeft > 0;
+    if (!hasFree && starBalance < starCost) {
+      setShowTopUp(true);
+      return;
+    }
 
     setIsLoading(true);
     setScreen(SCREENS.LOADING);
+    setResultType(currentMode.resultType);
     setError(null);
     hapticFeedback('medium');
 
     try {
-      // Отправляем файл — api.js загрузит на fal.ai и вызовет n8n
-      const result = await generateAvatar(
-        userId,
-        photoFile,
-        selectedStyle,
-        initData,
-        creativity,
-        setDebugStep
-      );
+      let result;
 
-      // Парсим ответ от n8n
+      switch (mode) {
+        case 'stylize':
+          result = await generateAvatar(userId, photoFile, selectedStyle, initData, creativity, setDebugStep);
+          break;
+        case 'multi_photo':
+          result = await generateMultiPhoto(
+            userId,
+            photos.filter(Boolean).map((p) => p.file),
+            promptText,
+            initData,
+            setDebugStep
+          );
+          break;
+        case 'style_transfer':
+          result = await generateStyleTransfer(userId, photoFile, referenceFile, initData, setDebugStep);
+          break;
+        case 'photo_to_video':
+          result = await generateVideo(userId, photoFile, promptText, videoDuration, initData, setDebugStep);
+          break;
+      }
+
       const data = Array.isArray(result) ? result[0] : result;
-      const imageUrl = data?.image_url || data?.images?.[0]?.url;
-
-      // DEBUG: временный лог для диагностики
-      setDebugStep(`Response: ${JSON.stringify(result).slice(0, 200)} | imageUrl: ${imageUrl}`);
+      setDebugStep(`Response: ${JSON.stringify(result).slice(0, 200)}`);
 
       if (data?.error === 'insufficient_balance') {
         setScreen(SCREENS.MAIN);
@@ -108,13 +179,26 @@ export default function App() {
         return;
       }
 
-      if (imageUrl) {
-        setResultImage(imageUrl);
-        setScreen(SCREENS.RESULT);
-        hapticFeedback('heavy');
-        await loadUserStatus();
+      if (currentMode.resultType === 'video') {
+        const videoUrl = data?.video_url || data?.video?.url;
+        if (videoUrl) {
+          setResultVideo(videoUrl);
+          setScreen(SCREENS.RESULT);
+          hapticFeedback('heavy');
+          await loadUserStatus();
+        } else {
+          throw new Error(`No video in response. Keys: ${Object.keys(data || {}).join(',')}`);
+        }
       } else {
-        throw new Error(`No image in response. Keys: ${Object.keys(data || {}).join(',')}`);
+        const imageUrl = data?.image_url || data?.images?.[0]?.url;
+        if (imageUrl) {
+          setResultImage(imageUrl);
+          setScreen(SCREENS.RESULT);
+          hapticFeedback('heavy');
+          await loadUserStatus();
+        } else {
+          throw new Error(`No image in response. Keys: ${Object.keys(data || {}).join(',')}`);
+        }
       }
     } catch (e) {
       console.error('Generation failed:', e);
@@ -129,24 +213,40 @@ export default function App() {
   const handleNewGeneration = () => {
     setScreen(SCREENS.MAIN);
     setResultImage(null);
+    setResultVideo(null);
+    setResultType('image');
     setPhotoFile(null);
     setPhotoPreview(null);
     setSelectedStyle(null);
+    setPhotos([null, null, null, null]);
+    setReferenceFile(null);
+    setReferencePreview(null);
+    setPromptText('');
+    setVideoDuration('6');
     setError(null);
+    // Keep mode selection
   };
 
-  const canGenerate = photoFile && selectedStyle;
+  // Button label per mode
+  const buttonLabels = {
+    stylize: '\u2728 Создать аватарку',
+    multi_photo: '\u2728 Сгенерировать',
+    style_transfer: '\u2728 Перенести стиль',
+    photo_to_video: '\ud83c\udfac Создать видео',
+  };
 
   return (
     <div className="app">
       <div className="bg-gradient"></div>
       <div className="bg-noise"></div>
 
-      {screen === SCREENS.LOADING && <LoadingScreen debugStep={debugStep} />}
+      {screen === SCREENS.LOADING && <LoadingScreen debugStep={debugStep} mode={mode} />}
 
-      {screen === SCREENS.RESULT && resultImage && (
+      {screen === SCREENS.RESULT && (resultImage || resultVideo) && (
         <ResultScreen
           imageUrl={resultImage}
+          videoUrl={resultVideo}
+          resultType={resultType}
           style={selectedStyle}
           onNewGeneration={handleNewGeneration}
           debugInfo={debugStep}
@@ -170,7 +270,7 @@ export default function App() {
             <h1 className="app-title">
               <span className="title-accent">AI</span> Аватарки
             </h1>
-            <p className="app-subtitle">Преврати своё фото в арт за секунды</p>
+            <p className="app-subtitle">{currentMode.description}</p>
             {freeLeft !== null && (
               <div className="header-balance">
                 <span className="header-free">
@@ -183,35 +283,84 @@ export default function App() {
             )}
           </header>
 
-          <PhotoUpload onPhotoSelected={handlePhotoSelected} />
+          <ModeSelector selectedMode={mode} onModeSelect={handleModeSelect} />
 
-          {photoFile && (
-            <StyleSelector
-              selectedStyle={selectedStyle}
-              onStyleSelect={handleStyleSelect}
+          {/* Stylize mode */}
+          {mode === 'stylize' && (
+            <>
+              <PhotoUpload onPhotoSelected={handlePhotoSelected} />
+              {photoFile && (
+                <StyleSelector selectedStyle={selectedStyle} onStyleSelect={handleStyleSelect} />
+              )}
+              {photoFile && (
+                <div className="creativity-control">
+                  <label className="control-label">Креативность:</label>
+                  <div className="slider-container">
+                    <span>0%</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={creativity}
+                      onChange={(e) => setCreativity(Number(e.target.value))}
+                      className="slider"
+                    />
+                    <span>100%</span>
+                  </div>
+                  <div className="creativity-value">{creativity}%</div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Multi-photo mode */}
+          {mode === 'multi_photo' && (
+            <>
+              <MultiPhotoUpload
+                photos={photos}
+                onPhotosChanged={setPhotos}
+                minPhotos={currentMode.minPhotos || 2}
+                maxPhotos={currentMode.maxPhotos || 4}
+              />
+              <PromptInput
+                value={promptText}
+                onChange={setPromptText}
+                placeholder="Опишите, как объединить фото... Например: объедини лица с фото 1 и 2 в стиле киберпанк"
+              />
+            </>
+          )}
+
+          {/* Style transfer mode */}
+          {mode === 'style_transfer' && (
+            <ReferencePhotoUpload
+              mainPhoto={{ file: photoFile, preview: photoPreview }}
+              referencePhoto={{ file: referenceFile, preview: referencePreview }}
+              onMainPhotoSelected={handlePhotoSelected}
+              onReferencePhotoSelected={handleReferenceSelected}
             />
           )}
 
-          {photoFile && (
-            <div className="creativity-control">
-              <label className="control-label">Креативность:</label>
-              <div className="slider-container">
-                <span>0%</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={creativity}
-                  onChange={(e) => setCreativity(Number(e.target.value))}
-                  className="slider"
-                />
-                <span>100%</span>
-              </div>
-              <div className="creativity-value">{creativity}%</div>
-            </div>
+          {/* Photo to video mode */}
+          {mode === 'photo_to_video' && (
+            <>
+              <PhotoUpload onPhotoSelected={handlePhotoSelected} />
+              {photoFile && (
+                <>
+                  <PromptInput
+                    value={promptText}
+                    onChange={setPromptText}
+                    placeholder="Опишите желаемое движение... Например: человек поворачивает голову и улыбается"
+                  />
+                  <DurationSelector
+                    selectedDuration={videoDuration}
+                    onDurationSelect={setVideoDuration}
+                  />
+                </>
+              )}
+            </>
           )}
 
-          {photoFile && selectedStyle && (
+          {canGenerate && (
             <GenerateButton
               canGenerate={canGenerate}
               freeLeft={freeLeft}
@@ -219,6 +368,9 @@ export default function App() {
               isLoading={isLoading}
               onClick={handleGenerate}
               onTopUp={() => setShowTopUp(true)}
+              starCost={starCost}
+              hasFreeGenerations={currentMode.hasFree}
+              buttonLabel={buttonLabels[mode]}
             />
           )}
         </div>

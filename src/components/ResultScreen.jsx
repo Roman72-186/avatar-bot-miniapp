@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from '../hooks/useTelegram';
 
-export default function ResultScreen({ imageUrl, style, onNewGeneration, debugInfo }) {
+export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image', style, onNewGeneration, debugInfo }) {
   const { hapticFeedback, tg, shareResult } = useTelegram();
   const [displayUrl, setDisplayUrl] = useState(null);
   const [imgError, setImgError] = useState(null);
 
+  const mediaUrl = resultType === 'video' ? videoUrl : imageUrl;
+
   useEffect(() => {
-    if (!imageUrl) return;
-    // Загружаем изображение через fetch и создаём blob URL
-    // чтобы обойти ограничения Telegram WebView на внешние домены
-    fetch(imageUrl)
+    if (!mediaUrl) return;
+    fetch(mediaUrl)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.blob();
@@ -18,29 +18,29 @@ export default function ResultScreen({ imageUrl, style, onNewGeneration, debugIn
       .then(blob => setDisplayUrl(URL.createObjectURL(blob)))
       .catch(e => {
         setImgError(e.message);
-        setDisplayUrl(imageUrl); // fallback — попробуем напрямую
+        setDisplayUrl(mediaUrl);
       });
-  }, [imageUrl]);
+  }, [mediaUrl]);
 
   const handleDownload = async () => {
     hapticFeedback('light');
     try {
-      // На Android Telegram WebView <a download> не работает — открываем ссылку
       if (tg) {
-        tg.openLink(imageUrl);
+        tg.openLink(mediaUrl);
       } else {
-        window.open(imageUrl, '_blank');
+        window.open(mediaUrl, '_blank');
       }
     } catch (e) {
-      window.open(imageUrl, '_blank');
+      window.open(mediaUrl, '_blank');
     }
   };
 
   const handleShare = () => {
     hapticFeedback('medium');
     const botLink = 'https://t.me/those_are_the_gifts_bot';
-    const shareText = `Смотри какую аватарку я сделал! 🎨 Попробуй тоже:`;
-
+    const shareText = resultType === 'video'
+      ? 'Смотри какое видео я сделал с помощью AI! 🎬 Попробуй тоже:'
+      : 'Смотри какую аватарку я сделал! 🎨 Попробуй тоже:';
     shareResult(botLink, shareText);
   };
 
@@ -54,9 +54,23 @@ export default function ResultScreen({ imageUrl, style, onNewGeneration, debugIn
       <h2 className="result-title">Готово! 🎉</h2>
       <div className="result-image-container">
         {displayUrl ? (
-          <img src={displayUrl} alt="Generated avatar" className="result-image" />
+          resultType === 'video' ? (
+            <video
+              src={displayUrl}
+              className="result-video"
+              controls
+              autoPlay
+              loop
+              playsInline
+              muted
+            />
+          ) : (
+            <img src={displayUrl} alt="Generated avatar" className="result-image" />
+          )
         ) : (
-          <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Загрузка изображения...</div>
+          <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
+            {resultType === 'video' ? 'Загрузка видео...' : 'Загрузка изображения...'}
+          </div>
         )}
         {imgError && (
           <div style={{ fontSize: 10, color: '#c33', textAlign: 'center' }}>fetch error: {imgError}</div>

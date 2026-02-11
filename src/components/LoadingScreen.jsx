@@ -1,31 +1,71 @@
 import { useState, useEffect } from 'react';
 
-const LOADING_MESSAGES = [
-  'Анализирую лицо... 🔍',
-  'Применяю магию стиля... 🎨',
-  'Добавляю детали... ✏️',
-  'Почти готово... ⚡',
-  'Финальные штрихи... 🌟',
-];
+const MESSAGES_BY_MODE = {
+  stylize: [
+    'Анализирую лицо... 🔍',
+    'Применяю магию стиля... 🎨',
+    'Добавляю детали... ✏️',
+    'Почти готово... ⚡',
+    'Финальные штрихи... 🌟',
+  ],
+  multi_photo: [
+    'Анализирую фотографии... 🔍',
+    'Объединяю элементы... 🧩',
+    'Создаю композицию... 🎨',
+    'Добавляю детали... ✏️',
+    'Финальные штрихи... 🌟',
+  ],
+  style_transfer: [
+    'Анализирую стиль референса... 🔍',
+    'Извлекаю палитру... 🎨',
+    'Переношу стиль... 🪄',
+    'Добавляю детали... ✏️',
+    'Финальные штрихи... 🌟',
+  ],
+  photo_to_video: [
+    'Анализирую фото... 🔍',
+    'Планирую движение... 🎬',
+    'Создаю кадры... 🖼️',
+    'Анимирую сцену... 🌊',
+    'Рендерю видео... ⚡',
+    'Почти готово... 🌟',
+  ],
+};
 
-export default function LoadingScreen({ debugStep }) {
+const HINTS = {
+  stylize: 'Обычно занимает 10–20 секунд',
+  multi_photo: 'Обычно занимает 15–30 секунд',
+  style_transfer: 'Обычно занимает 10–20 секунд',
+  photo_to_video: 'Обычно занимает 1–3 минуты',
+};
+
+export default function LoadingScreen({ debugStep, mode = 'stylize' }) {
   const [messageIndex, setMessageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
 
+  const messages = MESSAGES_BY_MODE[mode] || MESSAGES_BY_MODE.stylize;
+  const hint = HINTS[mode] || HINTS.stylize;
+  const isVideo = mode === 'photo_to_video';
+
+  useEffect(() => {
+    setMessageIndex(0);
+    setProgress(0);
+  }, [mode]);
+
   useEffect(() => {
     const msgInterval = setInterval(() => {
-      setMessageIndex((i) => (i + 1) % LOADING_MESSAGES.length);
-    }, 3000);
+      setMessageIndex((i) => (i + 1) % messages.length);
+    }, isVideo ? 5000 : 3000);
 
     const progressInterval = setInterval(() => {
-      setProgress((p) => Math.min(p + Math.random() * 8, 95));
-    }, 500);
+      setProgress((p) => Math.min(p + Math.random() * (isVideo ? 3 : 8), 95));
+    }, isVideo ? 1000 : 500);
 
     return () => {
       clearInterval(msgInterval);
       clearInterval(progressInterval);
     };
-  }, []);
+  }, [messages.length, isVideo]);
 
   return (
     <div className="loading-screen">
@@ -34,11 +74,11 @@ export default function LoadingScreen({ debugStep }) {
         <div className="orb-ring"></div>
         <div className="orb-ring delay"></div>
       </div>
-      <div className="loading-message">{LOADING_MESSAGES[messageIndex]}</div>
+      <div className="loading-message">{messages[messageIndex]}</div>
       <div className="progress-bar">
         <div className="progress-fill" style={{ width: `${progress}%` }}></div>
       </div>
-      <div className="loading-hint">Обычно занимает 10–20 секунд</div>
+      <div className="loading-hint">{hint}</div>
       {debugStep && (
         <div style={{ marginTop: 12, fontSize: 11, color: '#888', wordBreak: 'break-all', padding: '0 16px' }}>
           {debugStep}

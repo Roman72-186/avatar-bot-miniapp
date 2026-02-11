@@ -1,8 +1,19 @@
 import { STARS_PER_GENERATION } from '../utils/styles';
 
-export default function GenerateButton({ canGenerate, freeLeft, starBalance, isLoading, onClick, onTopUp }) {
-  const hasFree = freeLeft > 0;
-  const hasStars = starBalance >= STARS_PER_GENERATION;
+export default function GenerateButton({
+  canGenerate,
+  freeLeft,
+  starBalance,
+  isLoading,
+  onClick,
+  onTopUp,
+  starCost,
+  hasFreeGenerations = true,
+  buttonLabel,
+}) {
+  const cost = starCost ?? STARS_PER_GENERATION;
+  const hasFree = hasFreeGenerations && freeLeft > 0;
+  const hasStars = starBalance >= cost;
   const canAfford = hasFree || hasStars;
 
   return (
@@ -18,12 +29,12 @@ export default function GenerateButton({ canGenerate, freeLeft, starBalance, isL
             Генерирую...
           </span>
         ) : (
-          <span>✨ Создать аватарку</span>
+          <span>{buttonLabel || '\u2728 Создать аватарку'}</span>
         )}
       </button>
 
       <div className="balance-info">
-        {freeLeft !== null && (
+        {hasFreeGenerations && freeLeft !== null && (
           <div className="limits-info">
             {hasFree ? (
               <span>Бесплатных: <strong>{freeLeft}</strong> на сегодня</span>
@@ -33,14 +44,14 @@ export default function GenerateButton({ canGenerate, freeLeft, starBalance, isL
           </div>
         )}
         <div className="star-balance">
-          ⭐ Баланс: <strong>{starBalance || 0}</strong>
-          {!hasFree && <span className="cost-hint"> ({STARS_PER_GENERATION} ⭐ за генерацию)</span>}
+          \u2b50 Баланс: <strong>{starBalance || 0}</strong>
+          {!hasFree && <span className="cost-hint"> ({cost} \u2b50 за генерацию)</span>}
         </div>
       </div>
 
       {!canAfford && (
         <button className="topup-btn" onClick={onTopUp}>
-          ⭐ Пополнить баланс
+          \u2b50 Пополнить баланс
         </button>
       )}
     </div>
