@@ -179,6 +179,10 @@ export default function App() {
         return;
       }
 
+      if (data?.error) {
+        throw new Error(data.message || data.error_msg || 'Ошибка генерации. Попробуйте ещё раз.');
+      }
+
       if (currentMode.resultType === 'video') {
         const videoUrl = data?.video_url || data?.video?.url;
         if (videoUrl) {

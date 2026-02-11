@@ -51,7 +51,7 @@ export default function MultiPhotoUpload({ photos, onPhotosChanged, minPhotos = 
                 <>
                   <img src={photo.preview} alt={`\u0424\u043e\u0442\u043e ${i + 1}`} className="photo-slot-preview" />
                   <button className="photo-slot-remove" onClick={(e) => removePhoto(i, e)}>
-                    \u2715
+                    ✕
                   </button>
                 </>
               ) : (

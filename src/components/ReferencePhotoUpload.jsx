@@ -39,7 +39,7 @@ export default function ReferencePhotoUpload({
 
   return (
     <div className="reference-upload">
-      <div className="reference-upload-label">\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0444\u043e\u0442\u043e \u0438 \u0440\u0435\u0444\u0435\u0440\u0435\u043d\u0441</div>
+      <div className="reference-upload-label">Загрузите фото и референс</div>
       <div className="reference-grid">
         {slots.map((slot) => (
           <div
@@ -57,7 +57,7 @@ export default function ReferencePhotoUpload({
                     slot.onRemove();
                   }}
                 >
-                  \u2715
+                  ✕
                 </button>
               </>
             ) : (

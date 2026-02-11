@@ -44,14 +44,14 @@ export default function GenerateButton({
           </div>
         )}
         <div className="star-balance">
-          \u2b50 Баланс: <strong>{starBalance || 0}</strong>
-          {!hasFree && <span className="cost-hint"> ({cost} \u2b50 за генерацию)</span>}
+          ⭐ Баланс: <strong>{starBalance || 0}</strong>
+          {!hasFree && <span className="cost-hint"> ({cost} ⭐ за генерацию)</span>}
         </div>
       </div>
 
       {!canAfford && (
         <button className="topup-btn" onClick={onTopUp}>
-          \u2b50 Пополнить баланс
+          ⭐ Пополнить баланс
         </button>
       )}
     </div>
