@@ -15,6 +15,7 @@ import PromptInput from './components/PromptInput';
 import DurationSelector from './components/DurationSelector';
 import AdminPanel from './components/AdminPanel';
 import HistoryScreen from './components/HistoryScreen';
+import ReferralScreen from './components/ReferralScreen';
 import { saveGeneration } from './utils/generationCache';
 
 const SCREENS = {
@@ -23,6 +24,7 @@ const SCREENS = {
   RESULT: 'result',
   ERROR: 'error',
   HISTORY: 'history',
+  REFERRAL: 'referral',
 };
 
 export default function App() {
@@ -85,10 +87,10 @@ export default function App() {
     }
   };
 
-  const handleInvite = () => {
+  const handleShareInvite = () => {
     hapticFeedback('light');
     const link = `https://t.me/those_are_the_gifts_bot?start=ref_${userId}`;
-    const text = '🎨 Попробуй AI Avatar Studio — генерация аватарок, видео и арта прямо в Telegram! Бесплатные генерации каждый день.';
+    const text = '\ud83c\udfa8 \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 AI Avatar Studio \u2014 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f \u0430\u0432\u0430\u0442\u0430\u0440\u043e\u043a, \u0432\u0438\u0434\u0435\u043e \u0438 \u0430\u0440\u0442\u0430 \u043f\u0440\u044f\u043c\u043e \u0432 Telegram! \u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0435 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043a\u0430\u0436\u0434\u044b\u0439 \u0434\u0435\u043d\u044c.';
     try {
       if (tg) {
         tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
@@ -400,8 +402,8 @@ export default function App() {
                 <span className="header-history-btn" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.HISTORY); }}>
                   🕐 История
                 </span>
-                <span className="header-invite-btn" onClick={handleInvite}>
-                  🎁 Пригласить
+                <span className="header-invite-btn" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.REFERRAL); }}>
+                  🎁 Рефералы
                 </span>
               </div>
             )}
@@ -586,6 +588,14 @@ export default function App() {
         <HistoryScreen
           userId={userId}
           onBack={() => setScreen(SCREENS.MAIN)}
+        />
+      )}
+
+      {screen === SCREENS.REFERRAL && (
+        <ReferralScreen
+          userId={userId}
+          onBack={() => setScreen(SCREENS.MAIN)}
+          onInvite={handleShareInvite}
         />
       )}
 

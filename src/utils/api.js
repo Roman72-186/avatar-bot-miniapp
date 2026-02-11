@@ -417,6 +417,11 @@ export async function deleteUserGeneration(userId, generationId) {
   return apiRequest('delete-generation', { user_id: userId, generation_id: generationId });
 }
 
+// Реферальная статистика
+export async function getReferralStats(userId) {
+  return apiRequest('referral-stats', { user_id: userId });
+}
+
 // Admin stats
 export async function getAdminStats(password) {
   return apiRequest('admin-stats', { password });
