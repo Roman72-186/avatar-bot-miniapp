@@ -47,6 +47,17 @@ export default function App() {
   const [videoDuration, setVideoDuration] = useState('6');
   const [resultType, setResultType] = useState('image');
   const [resultVideo, setResultVideo] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+    hapticFeedback('light');
+  };
 
   useEffect(() => {
     initTelegram();
@@ -270,9 +281,12 @@ export default function App() {
 
       {screen === SCREENS.MAIN && (
         <div className="main-screen">
+          <button className="theme-toggle" onClick={toggleTheme}>
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
           <header className="app-header">
             <h1 className="app-title">
-              <span className="title-accent">AI</span> Аватарки
+              <span className="title-accent">AI</span> Avatar Studio
             </h1>
             <p className="app-subtitle">{currentMode.description}</p>
             {freeLeft !== null && (

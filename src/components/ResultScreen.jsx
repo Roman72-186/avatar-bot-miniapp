@@ -39,8 +39,8 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
     hapticFeedback('medium');
     const botLink = 'https://t.me/those_are_the_gifts_bot';
     const shareText = resultType === 'video'
-      ? 'Смотри какое видео я сделал с помощью AI! 🎬 Попробуй тоже:'
-      : 'Смотри какую аватарку я сделал! 🎨 Попробуй тоже:';
+      ? `Смотри какое видео я сделал с помощью AI! 🎬\n${mediaUrl}\n\nПопробуй тоже:`
+      : `Смотри какую аватарку я сделал! 🎨\n${mediaUrl}\n\nПопробуй тоже:`;
     shareResult(botLink, shareText);
   };
 
