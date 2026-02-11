@@ -26,14 +26,14 @@ const SCREENS = {
 };
 
 export default function App() {
-  const { initTelegram, userId, username, initData, hapticFeedback, openInvoice, startParam } = useTelegram();
+  const { tg, initTelegram, userId, username, initData, hapticFeedback, openInvoice, startParam } = useTelegram();
 
   const [screen, setScreen] = useState(SCREENS.MAIN);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [resultImage, setResultImage] = useState(null);
-  const [freeLeft, setFreeLeft] = useState(null);
+  const [freeGens, setFreeGens] = useState(null);
   const [starBalance, setStarBalance] = useState(0);
   const [showTopUp, setShowTopUp] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(50);
@@ -85,6 +85,23 @@ export default function App() {
     }
   };
 
+  const handleInvite = () => {
+    hapticFeedback('light');
+    const link = `https://t.me/those_are_the_gifts_bot?start=ref_${userId}`;
+    const text = '🎨 Попробуй AI Avatar Studio — генерация аватарок, видео и арта прямо в Telegram! Бесплатные генерации каждый день.';
+    try {
+      if (tg) {
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+      } else if (navigator.share) {
+        navigator.share({ title: 'Avatar Studio AI', text, url: link });
+      } else {
+        navigator.clipboard?.writeText(`${text}\n${link}`);
+      }
+    } catch {
+      navigator.clipboard?.writeText(`${text}\n${link}`);
+    }
+  };
+
   useEffect(() => {
     initTelegram();
     if (userId) {
@@ -96,11 +113,15 @@ export default function App() {
     try {
       const result = await getUserStatus(userId, initData, username);
       const status = Array.isArray(result) ? result[0] : result;
-      setFreeLeft(status.free_left ?? status.free_generations ?? 0);
+      setFreeGens({
+        free_stylize: status.free_stylize ?? 0,
+        free_remove_bg: status.free_remove_bg ?? 0,
+        free_enhance: status.free_enhance ?? 0,
+      });
       setStarBalance(status.star_balance || 0);
     } catch (e) {
       console.error('Failed to load user status:', e);
-      setFreeLeft(3);
+      setFreeGens({ free_stylize: 1, free_remove_bg: 1, free_enhance: 1 });
     }
   };
 
@@ -152,6 +173,7 @@ export default function App() {
   // Compute canGenerate based on mode
   const currentMode = MODES[mode];
   const starCost = getStarCost(mode, { duration: videoDuration });
+  const freeLeft = (freeGens && currentMode.freeKey) ? (freeGens[currentMode.freeKey] || 0) : 0;
   let canGenerate = false;
   switch (mode) {
     case 'stylize':
@@ -266,7 +288,24 @@ export default function App() {
       }
     } catch (e) {
       console.error('Generation failed:', e);
-      setError(e.message || 'Что-то пошло не так. Попробуй ещё раз.');
+      const msg = e.message || '';
+      let userMsg;
+      if (msg.includes('TIMEOUT') || msg.includes('AbortError') || msg.includes('60 секунд')) {
+        userMsg = 'Сервер не ответил вовремя. Попробуйте ещё раз через минуту.';
+      } else if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+        userMsg = 'Нет подключения к серверу. Проверьте интернет и попробуйте снова.';
+      } else if (msg.includes('insufficient_balance') || msg.includes('No balance')) {
+        userMsg = 'Недостаточно звёзд. Пополните баланс.';
+      } else if (msg.includes('UPLOAD') || msg.includes('upload')) {
+        userMsg = 'Не удалось загрузить фото. Попробуйте другое изображение.';
+      } else if (msg.includes('No image') || msg.includes('No video')) {
+        userMsg = 'AI не смог создать результат. Попробуйте другое фото или промпт.';
+      } else if (msg.includes('API error: 5')) {
+        userMsg = 'Сервер временно недоступен. Попробуйте через пару минут.';
+      } else {
+        userMsg = 'Что-то пошло не так. Попробуйте ещё раз.';
+      }
+      setError(userMsg);
       setScreen(SCREENS.ERROR);
       hapticFeedback('heavy');
     } finally {
@@ -338,11 +377,16 @@ export default function App() {
               <span className="title-accent" onClick={handleAiClick}>AI</span> Avatar Studio
             </h1>
             <p className="app-subtitle">{currentMode.description}</p>
-            {freeLeft !== null && (
+            {freeGens !== null && (
               <div className="header-balance">
-                {currentMode.hasFree && (
+                {currentMode.hasFree && freeLeft > 0 && (
+                  <span className="header-free free-available">
+                    1 бесплатная
+                  </span>
+                )}
+                {currentMode.hasFree && freeLeft <= 0 && (
                   <span className="header-free">
-                    {freeLeft > 0 ? `${freeLeft} бесплатных` : 'Бесплатные закончились'}
+                    {starCost} ⭐ · бесплатная использована
                   </span>
                 )}
                 {!currentMode.hasFree && (
@@ -355,6 +399,9 @@ export default function App() {
                 </span>
                 <span className="header-history-btn" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.HISTORY); }}>
                   🕐 История
+                </span>
+                <span className="header-invite-btn" onClick={handleInvite}>
+                  🎁 Пригласить
                 </span>
               </div>
             )}

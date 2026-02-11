@@ -37,9 +37,9 @@ export default function GenerateButton({
         {hasFreeGenerations && freeLeft !== null && (
           <div className="limits-info">
             {hasFree ? (
-              <span>Бесплатных: <strong>{freeLeft}</strong> на сегодня</span>
+              <span>Бесплатная генерация доступна</span>
             ) : (
-              <span>Бесплатные генерации закончились</span>
+              <span>Бесплатная генерация использована</span>
             )}
           </div>
         )}

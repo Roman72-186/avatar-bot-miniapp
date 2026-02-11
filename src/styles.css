@@ -134,6 +134,11 @@ body {
   color: var(--text-hint);
 }
 
+.header-free.free-available {
+  color: #4CAF50;
+  font-weight: 600;
+}
+
 .header-stars {
   color: #FFD700;
   font-weight: 600;
@@ -1325,6 +1330,22 @@ body {
   transform: scale(0.95);
   border-color: var(--accent);
   color: var(--text);
+}
+
+.header-invite-btn {
+  color: #fbbf24;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  transition: all 0.2s ease;
+}
+
+.header-invite-btn:active {
+  transform: scale(0.95);
+  background: rgba(251, 191, 36, 0.2);
 }
 
 /* === History Screen === */
