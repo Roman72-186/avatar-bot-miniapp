@@ -407,6 +407,11 @@ export async function generateTextToImage(userId, prompt, initData, onStep) {
   }
 }
 
+// История генераций пользователя
+export async function getUserGenerations(userId) {
+  return apiRequest('user-generations', { user_id: userId });
+}
+
 // Admin stats
 export async function getAdminStats(password) {
   return apiRequest('admin-stats', { password });

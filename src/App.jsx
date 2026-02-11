@@ -14,12 +14,15 @@ import ReferencePhotoUpload from './components/ReferencePhotoUpload';
 import PromptInput from './components/PromptInput';
 import DurationSelector from './components/DurationSelector';
 import AdminPanel from './components/AdminPanel';
+import HistoryScreen from './components/HistoryScreen';
+import { saveGeneration } from './utils/generationCache';
 
 const SCREENS = {
   MAIN: 'main',
   LOADING: 'loading',
   RESULT: 'result',
   ERROR: 'error',
+  HISTORY: 'history',
 };
 
 export default function App() {
@@ -241,6 +244,7 @@ export default function App() {
       if (currentMode.resultType === 'video') {
         const videoUrl = data?.video_url || data?.video?.url;
         if (videoUrl) {
+          saveGeneration({ mode, result_type: 'video', result_url: videoUrl, prompt: promptText });
           setResultVideo(videoUrl);
           setScreen(SCREENS.RESULT);
           hapticFeedback('heavy');
@@ -251,6 +255,7 @@ export default function App() {
       } else {
         const imageUrl = data?.image_url || data?.images?.[0]?.url;
         if (imageUrl) {
+          saveGeneration({ mode, result_type: 'image', result_url: imageUrl, prompt: promptText });
           setResultImage(imageUrl);
           setScreen(SCREENS.RESULT);
           hapticFeedback('heavy');
@@ -347,6 +352,9 @@ export default function App() {
                 )}
                 <span className="header-stars" onClick={() => setShowTopUp(true)}>
                   ⭐ {starBalance || 0}
+                </span>
+                <span className="header-history-btn" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.HISTORY); }}>
+                  🕐 История
                 </span>
               </div>
             )}
@@ -525,6 +533,13 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {screen === SCREENS.HISTORY && (
+        <HistoryScreen
+          userId={userId}
+          onBack={() => setScreen(SCREENS.MAIN)}
+        />
       )}
 
       {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
