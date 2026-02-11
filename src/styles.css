@@ -531,6 +531,17 @@ body {
   backdrop-filter: blur(8px);
 }
 
+.action-btn.delete {
+  background: rgba(200, 50, 50, 0.15);
+  border: 2px solid rgba(200, 50, 50, 0.3);
+  color: #f06060;
+  backdrop-filter: blur(8px);
+}
+
+.action-btn.delete:disabled {
+  opacity: 0.5;
+}
+
 .action-btn:active {
   transform: scale(0.96);
 }
@@ -1358,6 +1369,14 @@ body {
   font-family: var(--font-display);
   font-size: 20px;
   font-weight: 700;
+  flex: 1;
+}
+
+.history-ttl-hint {
+  font-size: 11px;
+  color: var(--text-hint);
+  opacity: 0.7;
+  white-space: nowrap;
 }
 
 .history-grid {

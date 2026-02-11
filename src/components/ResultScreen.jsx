@@ -10,6 +10,11 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
 
   useEffect(() => {
     if (!mediaUrl) return;
+    // Videos: use direct URL (fetch+blob fails due to CORS on CDN)
+    if (resultType === 'video') {
+      setDisplayUrl(mediaUrl);
+      return;
+    }
     fetch(mediaUrl)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -20,7 +25,7 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
         setImgError(e.message);
         setDisplayUrl(mediaUrl);
       });
-  }, [mediaUrl]);
+  }, [mediaUrl, resultType]);
 
   const handleDownload = async () => {
     hapticFeedback('light');

@@ -412,6 +412,11 @@ export async function getUserGenerations(userId) {
   return apiRequest('user-generations', { user_id: userId });
 }
 
+// Удалить генерацию из БД
+export async function deleteUserGeneration(userId, generationId) {
+  return apiRequest('delete-generation', { user_id: userId, generation_id: generationId });
+}
+
 // Admin stats
 export async function getAdminStats(password) {
   return apiRequest('admin-stats', { password });

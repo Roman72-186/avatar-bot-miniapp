@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getUserGenerations } from '../utils/api';
-import { getGenerations as getCachedGenerations } from '../utils/generationCache';
+import { getUserGenerations, deleteUserGeneration } from '../utils/api';
+import { getGenerations as getCachedGenerations, deleteGenerationByUrl } from '../utils/generationCache';
 import { MODES } from '../utils/modes';
 import { useTelegram } from '../hooks/useTelegram';
 
@@ -9,6 +9,7 @@ export default function HistoryScreen({ userId, onBack }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState(null);
+  const [deleting, setDeleting] = useState(null);
 
   useEffect(() => {
     // Сначала показываем кэш из localStorage
@@ -46,9 +47,7 @@ export default function HistoryScreen({ userId, onBack }) {
       if (diffMin < 60) return `${diffMin} мин назад`;
       const diffH = Math.floor(diffMin / 60);
       if (diffH < 24) return `${diffH} ч назад`;
-      const diffD = Math.floor(diffH / 24);
-      if (diffD < 7) return `${diffD} дн назад`;
-      return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+      return '';
     } catch {
       return '';
     }
@@ -69,6 +68,24 @@ export default function HistoryScreen({ userId, onBack }) {
     }
   };
 
+  const handleDelete = async (item) => {
+    hapticFeedback('medium');
+    setDeleting(item.id || item.result_url);
+    try {
+      // Удаляем из БД (если есть id)
+      if (item.id && userId) {
+        await deleteUserGeneration(userId, item.id).catch(() => {});
+      }
+      // Удаляем из localStorage
+      deleteGenerationByUrl(item.result_url);
+      // Удаляем из текущего списка
+      setItems(prev => prev.filter(i => (i.id || i.result_url) !== (item.id || item.result_url)));
+      setPreview(null);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   const handleClosePreview = () => {
     setPreview(null);
   };
@@ -80,6 +97,7 @@ export default function HistoryScreen({ userId, onBack }) {
           ←
         </button>
         <h2 className="history-title">Мои генерации</h2>
+        <span className="history-ttl-hint">хранятся 24ч</span>
       </div>
 
       {loading ? (
@@ -116,7 +134,7 @@ export default function HistoryScreen({ userId, onBack }) {
       {preview && (
         <div className="history-preview-overlay" onClick={handleClosePreview}>
           <button className="history-preview-close" onClick={handleClosePreview}>✕</button>
-          <div onClick={e => e.stopPropagation()}>
+          <div className="history-preview-content" onClick={e => e.stopPropagation()}>
             {preview.result_type === 'video' ? (
               <video
                 src={preview.result_url}
@@ -138,6 +156,13 @@ export default function HistoryScreen({ userId, onBack }) {
             <div className="history-preview-actions">
               <button className="action-btn primary" onClick={() => handleDownload(preview.result_url)}>
                 💾 Скачать
+              </button>
+              <button
+                className="action-btn delete"
+                onClick={() => handleDelete(preview)}
+                disabled={!!deleting}
+              >
+                {deleting ? '...' : '🗑 Удалить'}
               </button>
             </div>
           </div>
