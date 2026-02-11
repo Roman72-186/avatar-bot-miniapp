@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from '../hooks/useTelegram';
 
-export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image', style, onNewGeneration, debugInfo }) {
+export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image', style, onNewGeneration }) {
   const { hapticFeedback, tg, shareResult } = useTelegram();
   const [displayUrl, setDisplayUrl] = useState(null);
   const [imgError, setImgError] = useState(null);
@@ -87,11 +87,6 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
       <button className="new-generation-btn" onClick={handleNewGeneration}>
         🔄 Создать ещё
       </button>
-      {debugInfo && (
-        <div style={{ marginTop: 8, fontSize: 10, color: '#888', wordBreak: 'break-all', padding: '0 12px', maxHeight: 80, overflow: 'auto' }}>
-          {debugInfo}
-        </div>
-      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ export default function ReferencePhotoUpload({
   referencePhoto,
   onMainPhotoSelected,
   onReferencePhotoSelected,
+  labels,
 }) {
   const mainInputRef = useRef(null);
   const refInputRef = useRef(null);
@@ -20,7 +21,7 @@ export default function ReferencePhotoUpload({
 
   const slots = [
     {
-      title: '\u0422\u0432\u043e\u0451 \u0444\u043e\u0442\u043e',
+      title: labels?.main || '\u0422\u0432\u043e\u0451 \u0444\u043e\u0442\u043e',
       icon: '\ud83d\udcf7',
       photo: mainPhoto,
       inputRef: mainInputRef,
@@ -28,7 +29,7 @@ export default function ReferencePhotoUpload({
       onRemove: () => onMainPhotoSelected(null, null),
     },
     {
-      title: '\u0420\u0435\u0444\u0435\u0440\u0435\u043d\u0441 \u0441\u0442\u0438\u043b\u044f',
+      title: labels?.reference || '\u0420\u0435\u0444\u0435\u0440\u0435\u043d\u0441 \u0441\u0442\u0438\u043b\u044f',
       icon: '\ud83c\udfa8',
       photo: referencePhoto,
       inputRef: refInputRef,

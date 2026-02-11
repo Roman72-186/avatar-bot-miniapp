@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo } from './utils/api';
+import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateFaceSwap, generateRemoveBg, generateEnhance, generateTextToImage } from './utils/api';
 import { STYLES, STARS_PER_GENERATION } from './utils/styles';
 import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
 import PhotoUpload from './components/PhotoUpload';
@@ -13,6 +13,7 @@ import MultiPhotoUpload from './components/MultiPhotoUpload';
 import ReferencePhotoUpload from './components/ReferencePhotoUpload';
 import PromptInput from './components/PromptInput';
 import DurationSelector from './components/DurationSelector';
+import AdminPanel from './components/AdminPanel';
 
 const SCREENS = {
   MAIN: 'main',
@@ -48,6 +49,9 @@ export default function App() {
   const [resultType, setResultType] = useState('image');
   const [resultVideo, setResultVideo] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [aiClickCount, setAiClickCount] = useState(0);
+  const [aiClickTimer, setAiClickTimer] = useState(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -57,6 +61,25 @@ export default function App() {
   const toggleTheme = () => {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
     hapticFeedback('light');
+  };
+
+  const handleAiClick = () => {
+    const newCount = aiClickCount + 1;
+    setAiClickCount(newCount);
+
+    if (aiClickTimer) clearTimeout(aiClickTimer);
+
+    if (newCount >= 3) {
+      setAiClickCount(0);
+      const password = prompt('Admin password:');
+      if (password === '123hors456') {
+        setShowAdmin(true);
+        hapticFeedback('heavy');
+      }
+    } else {
+      const timer = setTimeout(() => setAiClickCount(0), 800);
+      setAiClickTimer(timer);
+    }
   };
 
   useEffect(() => {
@@ -140,6 +163,16 @@ export default function App() {
     case 'photo_to_video':
       canGenerate = !!(photoFile && promptText.trim().length > 0);
       break;
+    case 'face_swap':
+      canGenerate = !!(photoFile && referenceFile);
+      break;
+    case 'remove_bg':
+    case 'enhance':
+      canGenerate = !!photoFile;
+      break;
+    case 'text_to_image':
+      canGenerate = promptText.trim().length > 0;
+      break;
   }
 
   const handleGenerate = async () => {
@@ -179,10 +212,21 @@ export default function App() {
         case 'photo_to_video':
           result = await generateVideo(userId, photoFile, promptText, videoDuration, initData, setDebugStep);
           break;
+        case 'face_swap':
+          result = await generateFaceSwap(userId, photoFile, referenceFile, initData, setDebugStep);
+          break;
+        case 'remove_bg':
+          result = await generateRemoveBg(userId, photoFile, initData, setDebugStep);
+          break;
+        case 'enhance':
+          result = await generateEnhance(userId, photoFile, initData, setDebugStep);
+          break;
+        case 'text_to_image':
+          result = await generateTextToImage(userId, promptText, initData, setDebugStep);
+          break;
       }
 
       const data = Array.isArray(result) ? result[0] : result;
-      setDebugStep(`Response: ${JSON.stringify(result).slice(0, 200)}`);
 
       if (data?.error === 'insufficient_balance') {
         setScreen(SCREENS.MAIN);
@@ -248,6 +292,10 @@ export default function App() {
     multi_photo: '\u2728 Сгенерировать',
     style_transfer: '\u2728 Перенести стиль',
     photo_to_video: '\ud83c\udfac Создать видео',
+    face_swap: '\ud83d\udd04 Заменить лицо',
+    remove_bg: '\u2702\ufe0f Убрать фон',
+    enhance: '\u2728 Улучшить',
+    text_to_image: '\ud83d\udcac Создать',
   };
 
   return (
@@ -255,7 +303,7 @@ export default function App() {
       <div className="bg-gradient"></div>
       <div className="bg-noise"></div>
 
-      {screen === SCREENS.LOADING && <LoadingScreen debugStep={debugStep} mode={mode} />}
+      {screen === SCREENS.LOADING && <LoadingScreen mode={mode} />}
 
       {screen === SCREENS.RESULT && (resultImage || resultVideo) && (
         <ResultScreen
@@ -264,7 +312,6 @@ export default function App() {
           resultType={resultType}
           style={selectedStyle}
           onNewGeneration={handleNewGeneration}
-          debugInfo={debugStep}
         />
       )}
 
@@ -281,13 +328,16 @@ export default function App() {
 
       {screen === SCREENS.MAIN && (
         <div className="main-screen">
-          <button className="theme-toggle" onClick={toggleTheme}>
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
           <header className="app-header">
-            <h1 className="app-title">
-              <span className="title-accent">AI</span> Avatar Studio
-            </h1>
+            <div className="header-top-row">
+              <h1 className="app-title">
+                <span className="title-accent" onClick={handleAiClick}>AI</span> Avatar Studio
+              </h1>
+              <button className="theme-toggle" onClick={toggleTheme}>
+                <span className="theme-toggle-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+                <span className="theme-toggle-label">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+              </button>
+            </div>
             <p className="app-subtitle">{currentMode.description}</p>
             {freeLeft !== null && (
               <div className="header-balance">
@@ -385,6 +435,31 @@ export default function App() {
             </>
           )}
 
+          {/* Face swap mode */}
+          {mode === 'face_swap' && (
+            <ReferencePhotoUpload
+              mainPhoto={{ file: photoFile, preview: photoPreview }}
+              referencePhoto={{ file: referenceFile, preview: referencePreview }}
+              onMainPhotoSelected={handlePhotoSelected}
+              onReferencePhotoSelected={handleReferenceSelected}
+              labels={{ main: 'Ваше лицо', reference: 'Целевое фото' }}
+            />
+          )}
+
+          {/* Remove BG / Enhance modes */}
+          {(mode === 'remove_bg' || mode === 'enhance') && (
+            <PhotoUpload onPhotoSelected={handlePhotoSelected} />
+          )}
+
+          {/* Text to image mode */}
+          {mode === 'text_to_image' && (
+            <PromptInput
+              value={promptText}
+              onChange={setPromptText}
+              placeholder="Опишите изображение... Например: космонавт верхом на лошади в стиле ренессанс"
+            />
+          )}
+
           {canGenerate && (
             <GenerateButton
               canGenerate={canGenerate}
@@ -434,6 +509,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
     </div>
   );
 }

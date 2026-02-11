@@ -336,3 +336,78 @@ export async function generateVideo(userId, file, prompt, duration, initData, on
     throw new Error(`Stage: VIDEO_GEN, Error: ${msg}`);
   }
 }
+
+// Face Swap (fal-ai/face-swap)
+export async function generateFaceSwap(userId, sourceFile, targetFile, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+  try {
+    step('[1/4] Сжатие фотографий...');
+    const [compSrc, compTgt] = await Promise.all([compressImage(sourceFile), compressImage(targetFile)]);
+    step('[2/4] Загрузка фото на fal.ai...');
+    const [srcUrl, tgtUrl] = await Promise.all([uploadToFal(compSrc), uploadToFal(compTgt)]);
+    step('[3/4] Фото загружены. Замена лица...');
+    const requestData = { user_id: userId, mode: 'face_swap', source_url: srcUrl, target_url: tgtUrl, init_data: initData };
+    step('[4/4] Ожидание генерации...');
+    return await apiRequest('generate-face-swap', requestData, 120000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: FACE_SWAP, Error: ${msg}`);
+  }
+}
+
+// Remove Background (fal-ai/birefnet)
+export async function generateRemoveBg(userId, file, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+  try {
+    step('[1/3] Сжатие фото...');
+    const compressed = await compressImage(file);
+    step('[2/3] Загрузка на fal.ai...');
+    const imageUrl = await uploadToFal(compressed);
+    step('[3/3] Удаление фона...');
+    const requestData = { user_id: userId, mode: 'remove_bg', image_url: imageUrl, init_data: initData };
+    return await apiRequest('generate-remove-bg', requestData, 60000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: REMOVE_BG, Error: ${msg}`);
+  }
+}
+
+// Enhance / Upscale (fal-ai/clarity-upscaler)
+export async function generateEnhance(userId, file, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+  try {
+    step('[1/3] Подготовка фото...');
+    const compressed = await compressImage(file, 2048, 0.9);
+    step('[2/3] Загрузка на fal.ai...');
+    const imageUrl = await uploadToFal(compressed);
+    step('[3/3] Улучшение качества...');
+    const requestData = { user_id: userId, mode: 'enhance', image_url: imageUrl, init_data: initData };
+    return await apiRequest('generate-enhance', requestData, 120000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: ENHANCE, Error: ${msg}`);
+  }
+}
+
+// Text to Image (fal-ai/flux/dev/text-to-image)
+export async function generateTextToImage(userId, prompt, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+  try {
+    step('[1/2] Отправка промпта...');
+    const requestData = { user_id: userId, mode: 'text_to_image', prompt, init_data: initData };
+    step('[2/2] Генерация изображения...');
+    return await apiRequest('generate-text-to-image', requestData, 120000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: TEXT_TO_IMAGE, Error: ${msg}`);
+  }
+}
+
+// Admin stats
+export async function getAdminStats(password) {
+  return apiRequest('admin-stats', { password });
+}
