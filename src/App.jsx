@@ -358,6 +358,7 @@ export default function App() {
           resultType={resultType}
           style={selectedStyle}
           onNewGeneration={handleNewGeneration}
+          userId={userId}
         />
       )}
 
