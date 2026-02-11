@@ -48,22 +48,11 @@ export default function App() {
   const [videoDuration, setVideoDuration] = useState('6');
   const [resultType, setResultType] = useState('image');
   const [resultVideo, setResultVideo] = useState(null);
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [aiClickCount, setAiClickCount] = useState(0);
   const [aiClickTimer, setAiClickTimer] = useState(null);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
-    hapticFeedback('light');
-  };
 
   const handleAiClick = () => {
     const newCount = aiClickCount + 1;
@@ -340,15 +329,9 @@ export default function App() {
       {screen === SCREENS.MAIN && (
         <div className="main-screen">
           <header className="app-header">
-            <div className="header-top-row">
-              <h1 className="app-title">
-                <span className="title-accent" onClick={handleAiClick}>AI</span> Avatar Studio
-              </h1>
-              <button className="theme-toggle" onClick={toggleTheme}>
-                <span className="theme-toggle-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
-                <span className="theme-toggle-label">{theme === 'dark' ? 'Light' : 'Dark'}</span>
-              </button>
-            </div>
+            <h1 className="app-title">
+              <span className="title-accent" onClick={handleAiClick}>AI</span> Avatar Studio
+            </h1>
             <p className="app-subtitle">{currentMode.description}</p>
             {freeLeft !== null && (
               <div className="header-balance">
