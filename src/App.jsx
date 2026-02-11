@@ -50,6 +50,8 @@ export default function App() {
   const [resultVideo, setResultVideo] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
   const [aiClickCount, setAiClickCount] = useState(0);
   const [aiClickTimer, setAiClickTimer] = useState(null);
 
@@ -71,14 +73,23 @@ export default function App() {
 
     if (newCount >= 3) {
       setAiClickCount(0);
-      const password = prompt('Admin password:');
-      if (password === '123hors456') {
-        setShowAdmin(true);
-        hapticFeedback('heavy');
-      }
+      setAdminPassword('');
+      setShowPasswordModal(true);
+      hapticFeedback('medium');
     } else {
       const timer = setTimeout(() => setAiClickCount(0), 800);
       setAiClickTimer(timer);
+    }
+  };
+
+  const handleAdminPasswordSubmit = () => {
+    if (adminPassword === '123hors456') {
+      setShowPasswordModal(false);
+      setShowAdmin(true);
+      hapticFeedback('heavy');
+    } else {
+      hapticFeedback('error');
+      setAdminPassword('');
     }
   };
 
@@ -505,6 +516,29 @@ export default function App() {
             </button>
             <button className="modal-close-btn" onClick={() => setShowTopUp(false)}>
               Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPasswordModal && (
+        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Admin Access</h3>
+            <input
+              type="password"
+              className="topup-input"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdminPasswordSubmit()}
+              placeholder="Password"
+              autoFocus
+            />
+            <button className="topup-confirm-btn" onClick={handleAdminPasswordSubmit}>
+              Login
+            </button>
+            <button className="modal-close-btn" onClick={() => setShowPasswordModal(false)}>
+              Cancel
             </button>
           </div>
         </div>
