@@ -273,9 +273,16 @@ export default function App() {
             <p className="app-subtitle">{currentMode.description}</p>
             {freeLeft !== null && (
               <div className="header-balance">
-                <span className="header-free">
-                  {freeLeft > 0 ? `${freeLeft} бесплатных` : 'Бесплатные закончились'}
-                </span>
+                {currentMode.hasFree && (
+                  <span className="header-free">
+                    {freeLeft > 0 ? `${freeLeft} бесплатных` : 'Бесплатные закончились'}
+                  </span>
+                )}
+                {!currentMode.hasFree && (
+                  <span className="header-free">
+                    {starCost} ⭐ за генерацию
+                  </span>
+                )}
                 <span className="header-stars" onClick={() => setShowTopUp(true)}>
                   ⭐ {starBalance || 0}
                 </span>
