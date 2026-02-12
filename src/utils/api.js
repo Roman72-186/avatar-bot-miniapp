@@ -49,6 +49,14 @@ function readAsArrayBuffer(file) {
   });
 }
 
+// Detect Android Telegram WebView (CORS blocks direct fal.ai upload)
+function isAndroidTelegram() {
+  try {
+    const ua = navigator.userAgent || '';
+    return /Android/i.test(ua) && (/TelegramWebview/i.test(ua) || /Telegram/i.test(ua) || window.Telegram?.WebApp);
+  } catch { return false; }
+}
+
 // Server-side upload via n8n (Android fallback — bypasses CORS)
 async function uploadViaServer(file) {
   const base64 = await fileToBase64(file);
@@ -56,7 +64,7 @@ async function uploadViaServer(file) {
     photo_base64: base64,
     content_type: file.type || 'image/jpeg',
     file_name: file.name || 'photo.jpg',
-  }, 30000);
+  }, 45000);
   const data = Array.isArray(resp) ? resp[0] : resp;
   if (data?.file_url) return data.file_url;
   throw new Error('Stage: SERVER_UPLOAD, Error: no file_url in response');
@@ -64,6 +72,12 @@ async function uploadViaServer(file) {
 
 // Загрузка фото на fal.ai storage (клиент → fallback через n8n)
 export async function uploadToFal(file) {
+  // On Android Telegram WebView, skip client-side (CORS always blocks it)
+  if (isAndroidTelegram()) {
+    console.log('Android Telegram detected — using server upload directly');
+    return await uploadViaServer(file);
+  }
+
   // Try client-side upload first (fast, no server round-trip)
   try {
     const controller = new AbortController();
