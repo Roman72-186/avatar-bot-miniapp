@@ -10,21 +10,9 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
 
   useEffect(() => {
     if (!mediaUrl) return;
-    // Videos: use direct URL (fetch+blob fails due to CORS on CDN)
-    if (resultType === 'video') {
-      setDisplayUrl(mediaUrl);
-      return;
-    }
-    fetch(mediaUrl)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.blob();
-      })
-      .then(blob => setDisplayUrl(URL.createObjectURL(blob)))
-      .catch(e => {
-        setImgError(e.message);
-        setDisplayUrl(mediaUrl);
-      });
+    // Use direct URL for both images and videos
+    // Blob approach was causing partial loading issues on mobile
+    setDisplayUrl(mediaUrl);
   }, [mediaUrl, resultType]);
 
   const handleDownload = async () => {
