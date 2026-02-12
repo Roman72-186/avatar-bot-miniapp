@@ -120,7 +120,15 @@ export default function HistoryScreen({ userId, onBack }) {
                     <div className="history-item-play">▶</div>
                   </>
                 ) : (
-                  <img src={item.result_url} alt="" loading="lazy" />
+                  <img
+                    src={item.result_url}
+                    alt=""
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.opacity = '0.3';
+                      e.target.style.background = '#333';
+                    }}
+                  />
                 )}
                 <div className="history-item-overlay">
                   <span className="history-item-mode">{mode.emoji}</span>
