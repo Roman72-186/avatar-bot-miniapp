@@ -49,7 +49,7 @@ export const GENERATION_DEFAULTS = {
   guidance_scale: 4.5,
   instant_id_strength: 0.7,
   ip_adapter_weight: 0.2,
-  image_size: 'square_hd',
+  image_size: 'square', // 512x512 - оптимально для Telegram WebApp
 };
 
 // Лимиты
