@@ -79,7 +79,7 @@ export async function uploadToFal(file) {
 }
 
 // Сжатие изображения через canvas
-export function compressImage(file, maxWidth = 1024, quality = 0.8) {
+export function compressImage(file, maxWidth = 1024, quality = 0.85) {
   return new Promise((resolve) => {
     let resolved = false;
     const safeResolve = (val) => { if (!resolved) { resolved = true; resolve(val); } };
@@ -176,10 +176,9 @@ export async function generateAvatar(userId, file, style, initData, creativity =
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step('[1/5] Подготовка фото...');
-    // ВРЕМЕННО: отключено сжатие для теста
-    const compressedFile = file; // await compressImage(file);
-    step(`[2/5] Фото готово (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на fal.ai...`);
+    step('[1/5] Сжатие фото...');
+    const compressedFile = await compressImage(file, 900, 0.92);
+    step(`[2/5] Фото сжато (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на fal.ai...`);
 
     let imageUrl;
     let useFallback = false;
