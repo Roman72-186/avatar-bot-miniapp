@@ -176,9 +176,10 @@ export async function generateAvatar(userId, file, style, initData, creativity =
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step('[1/5] Сжатие фото...');
-    const compressedFile = await compressImage(file);
-    step(`[2/5] Фото сжато (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на fal.ai...`);
+    step('[1/5] Подготовка фото...');
+    // ВРЕМЕННО: отключено сжатие для теста
+    const compressedFile = file; // await compressImage(file);
+    step(`[2/5] Фото готово (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на fal.ai...`);
 
     let imageUrl;
     let useFallback = false;
