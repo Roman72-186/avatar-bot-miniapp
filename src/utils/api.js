@@ -34,10 +34,28 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000) {
   }
 }
 
-// Загрузка фото на fal.ai storage (таймаут 15 сек)
+// Read file/blob as ArrayBuffer (Android WebView compatible)
+function readAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof file.arrayBuffer === 'function') {
+      file.arrayBuffer().then(resolve).catch(reject);
+      return;
+    }
+    // Fallback for older Android WebView
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('FileReader failed'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// Загрузка фото на fal.ai storage (таймаут 20 сек)
 export async function uploadToFal(file) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const timer = setTimeout(() => controller.abort(), 20000);
+
+  const contentType = file.type || 'image/jpeg';
+  const fileName = file.name || 'photo.jpg';
 
   try {
     // 1. Получаем upload URL
@@ -48,8 +66,8 @@ export async function uploadToFal(file) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        file_name: file.name || 'photo.jpg',
-        content_type: file.type || 'image/jpeg',
+        file_name: fileName,
+        content_type: contentType,
       }),
       signal: controller.signal,
     });
@@ -60,13 +78,17 @@ export async function uploadToFal(file) {
 
     const { file_url, upload_url } = await initResponse.json();
 
-    // 2. Загружаем файл
+    // 2. Read file as ArrayBuffer for Android WebView compatibility
+    // (sending File/Blob directly via PUT can fail on some Android WebViews)
+    const buffer = await readAsArrayBuffer(file);
+
+    // 3. Upload to signed URL
     const uploadResponse = await fetch(upload_url, {
       method: 'PUT',
       headers: {
-        'Content-Type': file.type || 'image/jpeg',
+        'Content-Type': contentType,
       },
-      body: file,
+      body: buffer,
       signal: controller.signal,
     });
 
@@ -89,18 +111,19 @@ export async function uploadToFal(file) {
 // Сжатие изображения через canvas
 export function compressImage(file, maxWidth = 1024, quality = 0.8) {
   return new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = (val) => { if (!resolved) { resolved = true; resolve(val); } };
+
     try {
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
 
       const cleanup = () => { try { URL.revokeObjectURL(objectUrl); } catch(e) {} };
-      const fallback = () => { cleanup(); resolve(file); };
 
-      // Таймаут на случай если Image не загрузится
-      const timer = setTimeout(fallback, 5000);
+      // Safety timeout — fires even if toBlob callback errors/hangs (Android WebView)
+      const timer = setTimeout(() => { cleanup(); safeResolve(file); }, 8000);
 
       img.onload = () => {
-        clearTimeout(timer);
         try {
           let width = img.width;
           let height = img.height;
@@ -116,22 +139,33 @@ export function compressImage(file, maxWidth = 1024, quality = 0.8) {
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Fallback: toBlob может не поддерживаться на старых Android
+          const makeFile = (blob) => {
+            try {
+              return new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg' });
+            } catch (e) {
+              // File constructor not supported on some Android WebView — use Blob
+              const b = new Blob([blob], { type: 'image/jpeg' });
+              b.name = file.name || 'photo.jpg';
+              return b;
+            }
+          };
+
           if (typeof canvas.toBlob === 'function') {
             canvas.toBlob(
               (blob) => {
+                clearTimeout(timer);
                 cleanup();
-                if (blob) {
-                  resolve(new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg' }));
-                } else {
-                  resolve(file);
+                try {
+                  safeResolve(blob ? makeFile(blob) : file);
+                } catch (e) {
+                  safeResolve(file);
                 }
               },
               'image/jpeg',
               quality
             );
           } else {
-            // Используем toDataURL как запасной вариант
+            clearTimeout(timer);
             const dataUrl = canvas.toDataURL('image/jpeg', quality);
             const byteString = atob(dataUrl.split(',')[1]);
             const ab = new ArrayBuffer(byteString.length);
@@ -139,19 +173,20 @@ export function compressImage(file, maxWidth = 1024, quality = 0.8) {
             for (let i = 0; i < byteString.length; i++) {
               ia[i] = byteString.charCodeAt(i);
             }
-            const blob = new Blob([ab], { type: 'image/jpeg' });
             cleanup();
-            resolve(new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg' }));
+            safeResolve(makeFile(new Blob([ab], { type: 'image/jpeg' })));
           }
         } catch (e) {
-          fallback();
+          clearTimeout(timer);
+          cleanup();
+          safeResolve(file);
         }
       };
 
-      img.onerror = () => { clearTimeout(timer); fallback(); };
+      img.onerror = () => { clearTimeout(timer); cleanup(); safeResolve(file); };
       img.src = objectUrl;
     } catch (e) {
-      resolve(file);
+      safeResolve(file);
     }
   });
 }
