@@ -177,7 +177,7 @@ export async function generateAvatar(userId, file, style, initData, creativity =
 
   try {
     step('[1/5] Сжатие фото...');
-    const compressedFile = await compressImage(file, 900, 0.92);
+    const compressedFile = await compressImage(file, 600, 0.80);
     step(`[2/5] Фото сжато (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на fal.ai...`);
 
     // Всегда используем base64 - это надежнее
