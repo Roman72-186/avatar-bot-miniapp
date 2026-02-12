@@ -345,11 +345,18 @@ export async function generateRemoveBg(userId, file, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
     step('[1/3] Сжатие фото...');
-    const compressed = await compressImage(file);
-    step('[2/3] Загрузка на fal.ai...');
-    const imageUrl = await uploadToFal(compressed);
+    const compressed = await compressImage(file, 600, 0.80);
+    step('[2/3] Кодирование в base64...');
+    const photoBase64 = await fileToBase64(compressed);
     step('[3/3] Удаление фона...');
-    const requestData = { user_id: userId, mode: 'remove_bg', image_url: imageUrl, init_data: initData };
+    const requestData = {
+      user_id: userId,
+      mode: 'remove_bg',
+      photo_base64: photoBase64,
+      mime_type: compressed.type || 'image/jpeg',
+      file_name: compressed.name || 'photo.jpg',
+      init_data: initData
+    };
     return await apiRequest('generate-remove-bg', requestData, 60000);
   } catch (error) {
     const msg = error?.message || String(error);
@@ -363,11 +370,18 @@ export async function generateEnhance(userId, file, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
     step('[1/3] Подготовка фото...');
-    const compressed = await compressImage(file, 2048, 0.9);
-    step('[2/3] Загрузка на fal.ai...');
-    const imageUrl = await uploadToFal(compressed);
+    const compressed = await compressImage(file, 1024, 0.85);
+    step('[2/3] Кодирование в base64...');
+    const photoBase64 = await fileToBase64(compressed);
     step('[3/3] Улучшение качества...');
-    const requestData = { user_id: userId, mode: 'enhance', image_url: imageUrl, init_data: initData };
+    const requestData = {
+      user_id: userId,
+      mode: 'enhance',
+      photo_base64: photoBase64,
+      mime_type: compressed.type || 'image/jpeg',
+      file_name: compressed.name || 'photo.jpg',
+      init_data: initData
+    };
     return await apiRequest('generate-enhance', requestData, 120000);
   } catch (error) {
     const msg = error?.message || String(error);
