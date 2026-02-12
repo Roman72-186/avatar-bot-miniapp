@@ -1,3 +1,6 @@
+// Импорт стилей для получения полных промптов
+import { STYLES } from './styles.js';
+
 // n8n webhook base URL
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://n8n.creativeanalytic.ru/webhook';
 
@@ -185,12 +188,16 @@ export async function generateAvatar(userId, file, style, initData, creativity =
     const photoBase64 = await fileToBase64(compressedFile);
     step(`[4/5] Base64 готов (${Math.round(photoBase64.length / 1024)} КБ). Отправка на n8n...`);
 
+    // Найти полный промпт стиля по ID
+    const styleObj = STYLES.find(s => s.id === style);
+    const stylePrompt = styleObj?.prompt || `${style} style portrait`;
+
     const requestData = {
       user_id: userId,
       photo_base64: photoBase64,
       mime_type: compressedFile.type || 'image/jpeg',
       file_name: compressedFile.name || 'photo.jpg',
-      style: style,
+      style: stylePrompt,
       init_data: initData,
       creativity: creativity,
     };
