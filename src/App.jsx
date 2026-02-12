@@ -40,6 +40,7 @@ export default function App() {
   const [showTopUp, setShowTopUp] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(50);
   const [error, setError] = useState(null);
+  const [errorDetails, setErrorDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [creativity, setCreativity] = useState(50);
   const [debugStep, setDebugStep] = useState(null);
@@ -308,6 +309,7 @@ export default function App() {
         userMsg = 'Что-то пошло не так. Попробуйте ещё раз.';
       }
       setError(userMsg);
+      setErrorDetails(msg);
       setScreen(SCREENS.ERROR);
       hapticFeedback('heavy');
     } finally {
@@ -367,6 +369,11 @@ export default function App() {
           <div className="error-icon">😔</div>
           <h2>Ошибка</h2>
           <p>{error}</p>
+          {errorDetails && (
+            <div style={{ fontSize: '11px', color: '#888', marginTop: '10px', padding: '10px', background: '#1a1a1a', borderRadius: '8px', wordBreak: 'break-word', fontFamily: 'monospace' }}>
+              {errorDetails}
+            </div>
+          )}
           <button className="action-btn primary" onClick={handleNewGeneration}>
             Попробовать снова
           </button>
