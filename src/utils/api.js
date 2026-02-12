@@ -70,57 +70,12 @@ async function uploadViaServer(file) {
   throw new Error('Stage: SERVER_UPLOAD, Error: no file_url in response');
 }
 
-// Загрузка фото на fal.ai storage (клиент → fallback через n8n)
+// Загрузка фото на fal.ai storage (всегда через n8n для надежности)
 export async function uploadToFal(file) {
-  // На Android Telegram WebView пропускаем клиентскую загрузку (CORS всегда блокирует)
-  if (isAndroidTelegram()) {
-    console.log('Android Telegram — загрузка через сервер');
-    return await uploadViaServer(file);
-  }
-
-  // Try client-side upload first (fast, no server round-trip)
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-
-    const contentType = file.type || 'image/jpeg';
-    const fileName = file.name || 'photo.jpg';
-
-    const initResponse = await fetch('https://rest.alpha.fal.ai/storage/upload/initiate', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Key ${FAL_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ file_name: fileName, content_type: contentType }),
-      signal: controller.signal,
-    });
-
-    if (!initResponse.ok) throw new Error(`init ${initResponse.status}`);
-
-    const { file_url, upload_url } = await initResponse.json();
-    const buffer = await readAsArrayBuffer(file);
-
-    const uploadResponse = await fetch(upload_url, {
-      method: 'PUT',
-      headers: { 'Content-Type': contentType },
-      body: buffer,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timer);
-    if (!uploadResponse.ok) throw new Error(`put ${uploadResponse.status}`);
-
-    return file_url;
-  } catch (clientErr) {
-    // Client-side failed (CORS on Android, network, etc.) — use server fallback
-    console.warn('Client upload failed, using server fallback:', clientErr?.message);
-    try {
-      return await uploadViaServer(file);
-    } catch (serverErr) {
-      throw new Error(`Stage: UPLOAD_PROCESS, Error: client(${clientErr?.message}) server(${serverErr?.message})`);
-    }
-  }
+  // Всегда используем серверную загрузку через n8n
+  // Это надежнее и работает без блокировок
+  console.log('Загрузка через сервер n8n');
+  return await uploadViaServer(file);
 }
 
 // Сжатие изображения через canvas
