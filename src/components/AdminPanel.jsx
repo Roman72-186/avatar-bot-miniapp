@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
-import { getAdminStats } from '../utils/api';
+import { getAdminStats, addStarsByUsername } from '../utils/api';
 
 export default function AdminPanel({ onClose }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [addStarsUsername, setAddStarsUsername] = useState('');
+  const [addStarsAmount, setAddStarsAmount] = useState('');
+  const [addStarsLoading, setAddStarsLoading] = useState(false);
+  const [addStarsMessage, setAddStarsMessage] = useState('');
 
   useEffect(() => {
     loadStats();
@@ -25,6 +29,37 @@ export default function AdminPanel({ onClose }) {
       setError(e.message || 'Failed to load stats');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddStars = async () => {
+    if (!addStarsUsername.trim() || !addStarsAmount) {
+      setAddStarsMessage('Заполните username и количество звёзд');
+      return;
+    }
+
+    setAddStarsLoading(true);
+    setAddStarsMessage('');
+
+    try {
+      const result = await addStarsByUsername('123hors456', addStarsUsername.trim(), Number(addStarsAmount));
+      const data = Array.isArray(result) ? result[0] : result;
+
+      if (data?.error) {
+        setAddStarsMessage(`Ошибка: ${data.message}`);
+      } else if (data?.username) {
+        setAddStarsMessage(`✅ Начислено ${addStarsAmount} ⭐ пользователю @${data.username}. Новый баланс: ${data.star_balance} ⭐`);
+        setAddStarsUsername('');
+        setAddStarsAmount('');
+        // Обновить статистику
+        loadStats();
+      } else {
+        setAddStarsMessage('❌ Пользователь не найден');
+      }
+    } catch (e) {
+      setAddStarsMessage(`Ошибка: ${e.message}`);
+    } finally {
+      setAddStarsLoading(false);
     }
   };
 
@@ -88,6 +123,37 @@ export default function AdminPanel({ onClose }) {
             <button className="action-btn" onClick={loadStats} style={{ marginTop: '16px', width: '100%' }}>
               Обновить
             </button>
+
+            <div className="admin-add-stars" style={{ marginTop: '24px', padding: '16px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px' }}>
+              <h4 style={{ marginBottom: '12px' }}>Пополнить звёзды пользователю</h4>
+              <input
+                type="text"
+                placeholder="Username (без @)"
+                value={addStarsUsername}
+                onChange={(e) => setAddStarsUsername(e.target.value)}
+                style={{ width: '100%', padding: '10px', marginBottom: '8px', background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '14px' }}
+              />
+              <input
+                type="number"
+                placeholder="Количество звёзд"
+                value={addStarsAmount}
+                onChange={(e) => setAddStarsAmount(e.target.value)}
+                style={{ width: '100%', padding: '10px', marginBottom: '8px', background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: '8px', color: '#fff', fontSize: '14px' }}
+              />
+              <button
+                className="action-btn primary"
+                onClick={handleAddStars}
+                disabled={addStarsLoading}
+                style={{ width: '100%' }}
+              >
+                {addStarsLoading ? 'Начисление...' : 'Начислить звёзды'}
+              </button>
+              {addStarsMessage && (
+                <div style={{ marginTop: '8px', padding: '8px', background: addStarsMessage.startsWith('✅') ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)', borderRadius: '6px', fontSize: '13px', lineHeight: '1.4' }}>
+                  {addStarsMessage}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

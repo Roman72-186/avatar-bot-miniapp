@@ -431,3 +431,8 @@ export async function getReferralStats(userId) {
 export async function getAdminStats(password) {
   return apiRequest('admin-stats', { password });
 }
+
+// Add stars to user by username (admin only)
+export async function addStarsByUsername(password, username, amount) {
+  return apiRequest('add-stars', { password, username, amount });
+}
