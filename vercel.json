@@ -4,5 +4,16 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://n8n.creativeanalytic.ru https://rest.alpha.fal.ai https://fal.media https://v3.fal.media; img-src 'self' data: https: blob:; frame-ancestors 'self' https://web.telegram.org https://telegram.org;"
+        }
+      ]
+    }
   ]
 }
