@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAdminStats, addStarsByUsername } from '../utils/api';
+import { getAdminStats, addStarsByUsername, blockUser } from '../utils/api';
 
 export default function AdminPanel({ onClose }) {
   const [stats, setStats] = useState(null);
@@ -9,6 +9,7 @@ export default function AdminPanel({ onClose }) {
   const [addStarsAmount, setAddStarsAmount] = useState('');
   const [addStarsLoading, setAddStarsLoading] = useState(false);
   const [addStarsMessage, setAddStarsMessage] = useState('');
+  const [blockLoading, setBlockLoading] = useState(null); // username currently being blocked/unblocked
 
   useEffect(() => {
     loadStats();
@@ -63,6 +64,34 @@ export default function AdminPanel({ onClose }) {
     }
   };
 
+  const handleBlockUser = async (username, shouldBlock) => {
+    const action = shouldBlock ? 'заблокировать' : 'разблокировать';
+    if (!confirm(`Вы уверены что хотите ${action} пользователя @${username}?`)) {
+      return;
+    }
+
+    setBlockLoading(username);
+
+    try {
+      const result = await blockUser('123hors456', username, shouldBlock);
+      const data = Array.isArray(result) ? result[0] : result;
+
+      if (data?.error) {
+        alert(`Ошибка: ${data.message}`);
+      } else if (data?.username) {
+        alert(`✅ Пользователь @${data.username} ${shouldBlock ? 'заблокирован' : 'разблокирован'}`);
+        // Обновить статистику
+        loadStats();
+      } else {
+        alert('❌ Пользователь не найден');
+      }
+    } catch (e) {
+      alert(`Ошибка: ${e.message}`);
+    } finally {
+      setBlockLoading(null);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="admin-panel" onClick={(e) => e.stopPropagation()}>
@@ -112,8 +141,28 @@ export default function AdminPanel({ onClose }) {
                   {stats.top_users.map((user, i) => (
                     <div key={user.user_id} className="admin-user-row">
                       <span className="admin-user-rank">#{i + 1}</span>
+                      <span className="admin-user-status">{user.blocked ? '🔴' : '🟢'}</span>
                       <span className="admin-user-name">{user.username || user.user_id}</span>
                       <span className="admin-user-balance">{user.star_balance} ⭐</span>
+                      {user.username && (
+                        <button
+                          className="admin-user-block-btn"
+                          onClick={() => handleBlockUser(user.username, !user.blocked)}
+                          disabled={blockLoading === user.username}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '11px',
+                            background: user.blocked ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)',
+                            border: 'none',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            cursor: blockLoading === user.username ? 'wait' : 'pointer',
+                            opacity: blockLoading === user.username ? 0.5 : 1
+                          }}
+                        >
+                          {blockLoading === user.username ? '...' : (user.blocked ? 'Разблок' : 'Блок')}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

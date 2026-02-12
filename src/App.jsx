@@ -59,6 +59,7 @@ export default function App() {
   const [adminPassword, setAdminPassword] = useState('');
   const [aiClickCount, setAiClickCount] = useState(0);
   const [aiClickTimer, setAiClickTimer] = useState(null);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const handleAiClick = () => {
     const newCount = aiClickCount + 1;
@@ -116,6 +117,17 @@ export default function App() {
     try {
       const result = await getUserStatus(userId, initData, username);
       const status = Array.isArray(result) ? result[0] : result;
+
+      // Проверка блокировки пользователя
+      if (status.blocked) {
+        setIsBlocked(true);
+        setScreen(SCREENS.ERROR);
+        setError('Ваш аккаунт заблокирован');
+        setErrorDetails('Если вы считаете что это ошибка, свяжитесь с поддержкой.');
+        return;
+      }
+
+      setIsBlocked(false);
       setFreeGens({
         free_stylize: status.free_stylize ?? 0,
         free_remove_bg: status.free_remove_bg ?? 0,

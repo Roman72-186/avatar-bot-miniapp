@@ -436,3 +436,8 @@ export async function getAdminStats(password) {
 export async function addStarsByUsername(password, username, amount) {
   return apiRequest('add-stars', { password, username, amount });
 }
+
+// Block/unblock user (admin only)
+export async function blockUser(password, username, blocked) {
+  return apiRequest('block-user', { password, username, blocked });
+}
