@@ -7,34 +7,98 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'https://n8n.creativeanalytic.
 // fal.ai credentials
 const FAL_KEY = '0945b3eb-a693-44de-a7cb-85d3a8a1a437:6391f113a7c37f4da6a2e1ebda28d7bd';
 
-export async function apiRequest(endpoint, data = {}, timeoutMs = 60000) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+// Задержка между повторными попытками
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  try {
-    const response = await fetch(`${API_BASE}/${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-      signal: controller.signal,
-    });
+// Преобразование технических ошибок в понятные сообщения
+function getFriendlyErrorMessage(error, endpoint) {
+  const msg = error?.message || String(error);
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      throw new Error('Stage: TIMEOUT, Error: Сервер не ответил за 60 секунд. Попробуйте ещё раз.');
-    }
-    console.error('API request failed:', error);
-    throw error;
-  } finally {
-    clearTimeout(timeout);
+  // Таймаут
+  if (error.name === 'AbortError' || msg.includes('TIMEOUT')) {
+    return 'Генерация заняла слишком много времени. Попробуйте снова.';
   }
+
+  // Сетевые ошибки
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+    return 'Проблема с подключением. Проверьте интернет и попробуйте снова.';
+  }
+
+  // Ошибки сервера
+  if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('504')) {
+    return 'Сервер временно недоступен. Попробуйте через несколько секунд.';
+  }
+
+  // Ошибки fal.ai
+  if (msg.includes('fal.ai') || msg.includes('generation_failed')) {
+    return 'Ошибка генерации AI. Попробуйте снова или выберите другие параметры.';
+  }
+
+  // Ошибки баланса
+  if (msg.includes('balance') || msg.includes('stars')) {
+    return msg; // Показываем как есть
+  }
+
+  // Общая ошибка
+  return 'Что-то пошло не так. Попробуйте ещё раз.';
+}
+
+// API запрос с автоматическими повторными попытками
+export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetries = 2) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(`${API_BASE}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      // Проверка на ошибки в ответе
+      if (result?.error || result?.status === 'error') {
+        throw new Error(result.error || result.message || 'Generation failed');
+      }
+
+      return result;
+
+    } catch (error) {
+      clearTimeout(timeout);
+      lastError = error;
+
+      // Если это последняя попытка - выбрасываем ошибку
+      if (attempt === maxRetries) {
+        const friendlyMsg = getFriendlyErrorMessage(error, endpoint);
+        console.error(`API request failed after ${maxRetries + 1} attempts:`, error);
+        throw new Error(friendlyMsg);
+      }
+
+      // Логируем попытку
+      console.warn(`API request attempt ${attempt + 1} failed, retrying...`, error);
+
+      // Экспоненциальная задержка: 2s, 4s
+      const delay = Math.min(2000 * Math.pow(2, attempt), 5000);
+      await sleep(delay);
+    }
+  }
+
+  // На случай если цикл завершился без return (не должно произойти)
+  throw lastError || new Error('Unknown error');
 }
 
 // Read file/blob as ArrayBuffer (Android WebView compatible)
