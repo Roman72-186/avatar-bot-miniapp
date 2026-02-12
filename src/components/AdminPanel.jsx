@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { getAdminStats, addStarsByUsername, blockUser } from '../utils/api';
+import { useTelegram } from '../hooks/useTelegram';
 
 export default function AdminPanel({ onClose }) {
+  const { hapticFeedback } = useTelegram();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -142,7 +144,30 @@ export default function AdminPanel({ onClose }) {
                     <div key={user.user_id} className="admin-user-row">
                       <span className="admin-user-rank">#{i + 1}</span>
                       <span className="admin-user-status">{user.blocked ? '🔴' : '🟢'}</span>
-                      <span className="admin-user-name">{user.username || user.user_id}</span>
+                      <span className="admin-user-name" title={user.username || user.user_id}>
+                        {user.username || user.user_id}
+                      </span>
+                      {user.username && (
+                        <button
+                          className="admin-copy-btn"
+                          onClick={() => {
+                            navigator.clipboard.writeText(user.username);
+                            hapticFeedback('light');
+                          }}
+                          title="Копировать username"
+                          style={{
+                            padding: '2px 6px',
+                            fontSize: '10px',
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          📋
+                        </button>
+                      )}
                       <span className="admin-user-balance">{user.star_balance} ⭐</span>
                       {user.username && (
                         <button

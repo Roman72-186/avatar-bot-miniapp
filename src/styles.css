@@ -1282,6 +1282,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .admin-user-row {
@@ -1303,9 +1306,10 @@ body {
 .admin-user-name {
   flex: 1;
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  user-select: text;
+  cursor: text;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .admin-user-balance {
