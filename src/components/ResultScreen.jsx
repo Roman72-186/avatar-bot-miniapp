@@ -79,9 +79,6 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
             {resultType === 'video' ? 'Загрузка видео...' : 'Загрузка изображения...'}
           </div>
         )}
-        {imgError && (
-          <div style={{ fontSize: 10, color: '#c33', textAlign: 'center' }}>fetch error: {imgError}</div>
-        )}
       </div>
       <div className="result-actions">
         <button className="action-btn primary" onClick={handleDownload}>
