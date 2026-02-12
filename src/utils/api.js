@@ -49,62 +49,63 @@ function readAsArrayBuffer(file) {
   });
 }
 
-// Загрузка фото на fal.ai storage (таймаут 20 сек)
+// Server-side upload via n8n (Android fallback — bypasses CORS)
+async function uploadViaServer(file) {
+  const base64 = await fileToBase64(file);
+  const resp = await apiRequest('upload-photo', {
+    photo_base64: base64,
+    content_type: file.type || 'image/jpeg',
+    file_name: file.name || 'photo.jpg',
+  }, 30000);
+  const data = Array.isArray(resp) ? resp[0] : resp;
+  if (data?.file_url) return data.file_url;
+  throw new Error('Stage: SERVER_UPLOAD, Error: no file_url in response');
+}
+
+// Загрузка фото на fal.ai storage (клиент → fallback через n8n)
 export async function uploadToFal(file) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
-
-  const contentType = file.type || 'image/jpeg';
-  const fileName = file.name || 'photo.jpg';
-
+  // Try client-side upload first (fast, no server round-trip)
   try {
-    // 1. Получаем upload URL
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+
+    const contentType = file.type || 'image/jpeg';
+    const fileName = file.name || 'photo.jpg';
+
     const initResponse = await fetch('https://rest.alpha.fal.ai/storage/upload/initiate', {
       method: 'POST',
       headers: {
         'Authorization': `Key ${FAL_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        file_name: fileName,
-        content_type: contentType,
-      }),
+      body: JSON.stringify({ file_name: fileName, content_type: contentType }),
       signal: controller.signal,
     });
 
-    if (!initResponse.ok) {
-      throw new Error(`Stage: INIT_UPLOAD_URL, Error: Failed to initiate upload, status: ${initResponse.status}`);
-    }
+    if (!initResponse.ok) throw new Error(`init ${initResponse.status}`);
 
     const { file_url, upload_url } = await initResponse.json();
-
-    // 2. Read file as ArrayBuffer for Android WebView compatibility
-    // (sending File/Blob directly via PUT can fail on some Android WebViews)
     const buffer = await readAsArrayBuffer(file);
 
-    // 3. Upload to signed URL
     const uploadResponse = await fetch(upload_url, {
       method: 'PUT',
-      headers: {
-        'Content-Type': contentType,
-      },
+      headers: { 'Content-Type': contentType },
       body: buffer,
       signal: controller.signal,
     });
 
-    if (!uploadResponse.ok) {
-      throw new Error(`Stage: UPLOAD_FILE, Error: Failed to upload file to signed URL, status: ${uploadResponse.status}`);
-    }
+    clearTimeout(timer);
+    if (!uploadResponse.ok) throw new Error(`put ${uploadResponse.status}`);
 
     return file_url;
-  } catch (error) {
-    const msg = error?.message || String(error);
-    if (msg.includes('Stage:')) {
-      throw error;
+  } catch (clientErr) {
+    // Client-side failed (CORS on Android, network, etc.) — use server fallback
+    console.warn('Client upload failed, using server fallback:', clientErr?.message);
+    try {
+      return await uploadViaServer(file);
+    } catch (serverErr) {
+      throw new Error(`Stage: UPLOAD_PROCESS, Error: client(${clientErr?.message}) server(${serverErr?.message})`);
     }
-    throw new Error(`Stage: UPLOAD_PROCESS, Error: ${msg}`);
-  } finally {
-    clearTimeout(timer);
   }
 }
 

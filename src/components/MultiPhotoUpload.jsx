@@ -4,7 +4,7 @@ export default function MultiPhotoUpload({ photos, onPhotosChanged, minPhotos = 
   const inputRefs = useRef([]);
 
   const handleFile = (index, file) => {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file || (file.type && !file.type.startsWith('image/'))) return;
     if (file.size > 10 * 1024 * 1024) return;
 
     const reader = new FileReader();

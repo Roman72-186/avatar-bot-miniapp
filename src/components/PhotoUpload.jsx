@@ -3,18 +3,18 @@ import { useState, useRef } from 'react';
 export default function PhotoUpload({ onPhotoSelected }) {
   const [preview, setPreview] = useState(null);
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef(null);
+  const galleryRef = useRef(null);
+  const cameraRef = useRef(null);
 
   const handleFile = (file) => {
     if (!file) return;
 
-    // Проверяем тип файла
-    if (!file.type.startsWith('image/')) {
+    // На Android file.type может быть пустым — проверяем лояльно
+    if (file.type && !file.type.startsWith('image/')) {
       alert('Пожалуйста, выберите изображение');
       return;
     }
 
-    // Проверяем размер (макс 10MB)
     if (file.size > 10 * 1024 * 1024) {
       alert('Файл слишком большой. Максимум 10MB');
       return;
@@ -41,9 +41,8 @@ export default function PhotoUpload({ onPhotoSelected }) {
   const resetPhoto = () => {
     setPreview(null);
     onPhotoSelected(null, null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (galleryRef.current) galleryRef.current.value = '';
+    if (cameraRef.current) cameraRef.current.value = '';
   };
 
   return (
@@ -58,39 +57,39 @@ export default function PhotoUpload({ onPhotoSelected }) {
           <div className="upload-icon">📸</div>
           <div className="upload-title">Загрузи своё фото</div>
           <div className="upload-hint">Лучше всего работает с портретным фото лица крупным планом</div>
-          
+
           <div className="upload-buttons">
             <button
               className="upload-btn gallery-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                document.getElementById('gallery-input')?.click();
+                galleryRef.current?.click();
               }}
             >
               📸 Галерея
             </button>
-            
+
             <button
               className="upload-btn camera-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                document.getElementById('camera-input')?.click();
+                cameraRef.current?.click();
               }}
             >
               📷 Камера
             </button>
           </div>
-          
+
           <input
-            id="gallery-input"
+            ref={galleryRef}
             type="file"
             accept="image/*"
             onChange={handleInputChange}
             style={{ display: 'none' }}
           />
-          
+
           <input
-            id="camera-input"
+            ref={cameraRef}
             type="file"
             accept="image/*"
             capture="user"

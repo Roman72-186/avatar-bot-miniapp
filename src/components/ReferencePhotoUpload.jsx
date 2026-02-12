@@ -11,7 +11,7 @@ export default function ReferencePhotoUpload({
   const refInputRef = useRef(null);
 
   const handleFile = (file, callback) => {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file || (file.type && !file.type.startsWith('image/'))) return;
     if (file.size > 10 * 1024 * 1024) return;
 
     const reader = new FileReader();
