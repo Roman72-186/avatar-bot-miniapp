@@ -180,41 +180,20 @@ export async function generateAvatar(userId, file, style, initData, creativity =
     const compressedFile = await compressImage(file, 900, 0.92);
     step(`[2/5] Фото сжато (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на fal.ai...`);
 
-    let imageUrl;
-    let useFallback = false;
+    // Всегда используем base64 - это надежнее
+    step('[3/5] Кодирование в base64...');
+    const photoBase64 = await fileToBase64(compressedFile);
+    step(`[4/5] Base64 готов (${Math.round(photoBase64.length / 1024)} КБ). Отправка на n8n...`);
 
-    try {
-      imageUrl = await uploadToFal(compressedFile);
-      step('[3/5] Фото загружено. Отправка на генерацию...');
-    } catch (uploadError) {
-      step(`[3/5] fal.ai недоступен (${uploadError?.message?.slice(0, 50)}). Используем base64...`);
-      useFallback = true;
-    }
-
-    let requestData;
-    if (useFallback) {
-      step('[3/5] Кодирование в base64...');
-      const photoBase64 = await fileToBase64(compressedFile);
-      step(`[4/5] Base64 готов (${Math.round(photoBase64.length / 1024)} КБ). Отправка на n8n...`);
-      requestData = {
-        user_id: userId,
-        photo_base64: photoBase64,
-        mime_type: compressedFile.type || 'image/jpeg',
-        file_name: compressedFile.name || 'photo.jpg',
-        style: style,
-        init_data: initData,
-        creativity: creativity,
-      };
-    } else {
-      step('[4/5] Отправка запроса на n8n...');
-      requestData = {
-        user_id: userId,
-        image_url: imageUrl,
-        style: style,
-        init_data: initData,
-        creativity: creativity,
-      };
-    }
+    const requestData = {
+      user_id: userId,
+      photo_base64: photoBase64,
+      mime_type: compressedFile.type || 'image/jpeg',
+      file_name: compressedFile.name || 'photo.jpg',
+      style: style,
+      init_data: initData,
+      creativity: creativity,
+    };
 
     step('[5/5] Ожидание генерации от AI...');
     const result = await apiRequest('generate', requestData);
