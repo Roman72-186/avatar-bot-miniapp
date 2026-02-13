@@ -8,6 +8,7 @@ import StyleSelector from './components/StyleSelector';
 import GenerateButton from './components/GenerateButton';
 import LoadingScreen from './components/LoadingScreen';
 import ResultScreen from './components/ResultScreen';
+import SentScreen from './components/SentScreen';
 import ModeSelector from './components/ModeSelector';
 import MultiPhotoUpload from './components/MultiPhotoUpload';
 import ReferencePhotoUpload from './components/ReferencePhotoUpload';
@@ -22,6 +23,7 @@ const SCREENS = {
   MAIN: 'main',
   LOADING: 'loading',
   RESULT: 'result',
+  SENT: 'sent',
   ERROR: 'error',
   HISTORY: 'history',
   REFERRAL: 'referral',
@@ -278,6 +280,15 @@ export default function App() {
         throw new Error(data.message || data.error_msg || 'Ошибка генерации. Попробуйте ещё раз.');
       }
 
+      // New flow: result sent to Telegram DM
+      if (data?.sent) {
+        setScreen(SCREENS.SENT);
+        hapticFeedback('heavy');
+        await loadUserStatus();
+        return;
+      }
+
+      // Fallback: old flow with image/video URL in response
       if (currentMode.resultType === 'video') {
         const videoUrl = data?.video_url || data?.video?.url;
         if (videoUrl) {
@@ -364,6 +375,10 @@ export default function App() {
       <div className="bg-noise"></div>
 
       {screen === SCREENS.LOADING && <LoadingScreen mode={mode} />}
+
+      {screen === SCREENS.SENT && (
+        <SentScreen onBack={handleNewGeneration} />
+      )}
 
       {screen === SCREENS.RESULT && (resultImage || resultVideo) && (
         <ResultScreen
