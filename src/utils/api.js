@@ -124,25 +124,42 @@ function isAndroidTelegram() {
   } catch { return false; }
 }
 
-// Загрузка через сервер n8n (обход CORS для Android)
-async function uploadViaServer(file) {
+// Загрузка фото на S3 через микросервис
+async function uploadToS3(file) {
   const base64 = await fileToBase64(file);
-  const resp = await apiRequest('upload-photo', {
-    photo_base64: base64,
-    content_type: file.type || 'image/jpeg',
-    file_name: file.name || 'photo.jpg',
-  }, 45000);
-  const data = Array.isArray(resp) ? resp[0] : resp;
-  if (data?.file_url) return data.file_url;
-  throw new Error('Stage: SERVER_UPLOAD, Error: no file_url in response');
+
+  // Используем прямой fetch к S3 микросервису (не через apiRequest)
+  const response = await fetch('https://n8n.creativeanalytic.ru/s3-upload/upload-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      photo_base64: base64,
+      mime_type: file.type || 'image/jpeg',
+      file_name: file.name || 'photo.jpg',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`S3 upload failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const result = Array.isArray(data) ? data[0] : data;
+
+  if (result?.file_url) {
+    console.log('✅ Фото загружено на S3:', result.file_url);
+    return result.file_url;
+  }
+
+  throw new Error('Stage: S3_UPLOAD, Error: no file_url in response');
 }
 
-// Загрузка фото на fal.ai storage (всегда через n8n для надежности)
+// Загрузка фото (теперь на S3 вместо fal.ai)
 export async function uploadToFal(file) {
-  // Всегда используем серверную загрузку через n8n
-  // Это надежнее и работает без блокировок
-  console.log('Загрузка через сервер n8n');
-  return await uploadViaServer(file);
+  // Загружаем на S3 через микросервис
+  // Результат доступен без VPN и блокировок
+  console.log('Загрузка фото на S3...');
+  return await uploadToS3(file);
 }
 
 // Сжатие изображения через canvas
@@ -245,12 +262,12 @@ export async function generateAvatar(userId, file, style, initData, creativity =
   try {
     step('[1/5] Сжатие фото...');
     const compressedFile = await compressImage(file, 600, 0.80);
-    step(`[2/5] Фото сжато (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на fal.ai...`);
+    step(`[2/5] Фото сжато (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на S3...`);
 
     // Всегда используем base64 - это надежнее
     step('[3/5] Кодирование в base64...');
     const photoBase64 = await fileToBase64(compressedFile);
-    step(`[4/5] Base64 готов (${Math.round(photoBase64.length / 1024)} КБ). Отправка на n8n...`);
+    step(`[4/5] Base64 готов (${Math.round(photoBase64.length / 1024)} КБ). Загрузка на сервер...`);
 
     // Найти полный промпт стиля по ID
     const styleObj = STYLES.find(s => s.id === style);
@@ -338,7 +355,7 @@ export async function generateStyleTransfer(userId, mainFile, refFile, initData,
       compressImage(refFile),
     ]);
 
-    step('[2/4] Загрузка фото на fal.ai...');
+    step('[2/4] Загрузка фото на S3...');
     const [mainUrl, refUrl] = await Promise.all([
       uploadToFal(compressedMain),
       uploadToFal(compressedRef),
@@ -370,7 +387,7 @@ export async function generateVideo(userId, file, prompt, duration, initData, on
     step('[1/4] Сжатие фото...');
     const compressedFile = await compressImage(file);
 
-    step('[2/4] Загрузка фото на fal.ai...');
+    step('[2/4] Загрузка фото на S3...');
     const imageUrl = await uploadToFal(compressedFile);
 
     step('[3/4] Фото загружено. Отправка на генерацию видео...');
@@ -398,7 +415,7 @@ export async function generateFaceSwap(userId, sourceFile, targetFile, initData,
   try {
     step('[1/4] Сжатие фотографий...');
     const [compSrc, compTgt] = await Promise.all([compressImage(sourceFile), compressImage(targetFile)]);
-    step('[2/4] Загрузка фото на fal.ai...');
+    step('[2/4] Загрузка фото на S3...');
     const [srcUrl, tgtUrl] = await Promise.all([uploadToFal(compSrc), uploadToFal(compTgt)]);
     step('[3/4] Фото загружены. Замена лица...');
     const requestData = { user_id: userId, mode: 'face_swap', source_url: srcUrl, target_url: tgtUrl, init_data: initData };
@@ -417,15 +434,13 @@ export async function generateRemoveBg(userId, file, initData, onStep) {
   try {
     step('[1/3] Сжатие фото...');
     const compressed = await compressImage(file, 600, 0.80);
-    step('[2/3] Кодирование в base64...');
-    const photoBase64 = await fileToBase64(compressed);
+    step('[2/3] Загрузка фото...');
+    const imageUrl = await uploadToFal(compressed);
     step('[3/3] Удаление фона...');
     const requestData = {
       user_id: userId,
       mode: 'remove_bg',
-      photo_base64: photoBase64,
-      mime_type: compressed.type || 'image/jpeg',
-      file_name: compressed.name || 'photo.jpg',
+      image_url: imageUrl,
       init_data: initData
     };
     return await apiRequest('generate-remove-bg', requestData, 60000);
@@ -442,15 +457,13 @@ export async function generateEnhance(userId, file, initData, onStep) {
   try {
     step('[1/3] Подготовка фото...');
     const compressed = await compressImage(file, 1024, 0.85);
-    step('[2/3] Кодирование в base64...');
-    const photoBase64 = await fileToBase64(compressed);
+    step('[2/3] Загрузка фото...');
+    const imageUrl = await uploadToFal(compressed);
     step('[3/3] Улучшение качества...');
     const requestData = {
       user_id: userId,
       mode: 'enhance',
-      photo_base64: photoBase64,
-      mime_type: compressed.type || 'image/jpeg',
-      file_name: compressed.name || 'photo.jpg',
+      image_url: imageUrl,
       init_data: initData
     };
     return await apiRequest('generate-enhance', requestData, 120000);
