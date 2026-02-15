@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateFaceSwap, generateRemoveBg, generateEnhance, generateTextToImage } from './utils/api';
+import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateFaceSwap, generateRemoveBg, generateEnhance, generateTextToImage, generateGeminiStyle } from './utils/api';
 import { STYLES, STARS_PER_GENERATION } from './utils/styles';
 import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
 import PhotoUpload from './components/PhotoUpload';
@@ -202,6 +202,9 @@ export default function App() {
     case 'style_transfer':
       canGenerate = !!(photoFile && referenceFile);
       break;
+    case 'gemini_style':
+      canGenerate = !!(photoFile && referenceFile);
+      break;
     case 'photo_to_video':
       canGenerate = !!(photoFile && promptText.trim().length > 0);
       break;
@@ -250,6 +253,9 @@ export default function App() {
           break;
         case 'style_transfer':
           result = await generateStyleTransfer(userId, photoFile, referenceFile, promptText, initData, setDebugStep);
+          break;
+        case 'gemini_style':
+          result = await generateGeminiStyle(userId, photoFile, referenceFile, promptText, initData, setDebugStep);
           break;
         case 'photo_to_video':
           result = await generateVideo(userId, photoFile, promptText, videoDuration, initData, setDebugStep);
@@ -362,6 +368,7 @@ export default function App() {
     stylize: '\u2728 Создать аватарку',
     multi_photo: '\u2728 Сгенерировать',
     style_transfer: '\u2728 Перенести стиль',
+    gemini_style: '\ud83c\udf1f Создать с Gemini',
     photo_to_video: '\ud83c\udfac Создать видео',
     face_swap: '\ud83d\udd04 Заменить лицо',
     remove_bg: '\u2702\ufe0f Убрать фон',
@@ -522,6 +529,19 @@ export default function App() {
                 </>
               )}
             </>
+          )}
+
+          {/* Gemini style mode */}
+          {mode === 'gemini_style' && (
+            <ReferencePhotoUpload
+              mainPhoto={{ file: photoFile, preview: photoPreview }}
+              referencePhoto={{ file: referenceFile, preview: referencePreview }}
+              onMainPhotoSelected={handlePhotoSelected}
+              onReferencePhotoSelected={handleReferenceSelected}
+              promptText={promptText}
+              onPromptChange={setPromptText}
+              promptPlaceholder="Опишите желаемый стиль (необязательно)"
+            />
           )}
 
           {/* Face swap mode */}

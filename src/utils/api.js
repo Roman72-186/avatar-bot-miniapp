@@ -384,6 +384,46 @@ export async function generateStyleTransfer(userId, mainFile, refFile, prompt, i
   }
 }
 
+// Генерация с Google Gemini (gemini-1.5-flash)
+export async function generateGeminiStyle(userId, mainFile, refFile, prompt, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+
+  try {
+    step('[1/4] Сжатие фотографий...');
+    const [compressedMain, compressedRef] = await Promise.all([
+      compressImage(mainFile),
+      compressImage(refFile),
+    ]);
+
+    step('[2/4] Загрузка фото на S3...');
+    const [mainUrl, refUrl] = await Promise.all([
+      uploadToFal(compressedMain),
+      uploadToFal(compressedRef),
+    ]);
+
+    step('[3/4] Фото загружены. Отправка на генерацию через Gemini...');
+    const requestData = {
+      user_id: userId,
+      mode: 'gemini_style',
+      image_url: mainUrl,
+      style_reference_image_url: refUrl,
+      init_data: initData,
+    };
+
+    // Добавляем промпт, если он указан
+    if (prompt && prompt.trim().length > 0) {
+      requestData.prompt = prompt.trim();
+    }
+
+    step('[4/4] Ожидание генерации от Gemini AI...');
+    return await apiRequest('generate-gemini-style', requestData, 120000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: GEMINI_STYLE, Error: ${msg}`);
+  }
+}
+
 // Генерация видео из фото + промпт (fal-ai/minimax/hailuo-2.3)
 export async function generateVideo(userId, file, prompt, duration, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
