@@ -345,7 +345,7 @@ export async function generateMultiPhoto(userId, files, prompt, initData, onStep
 }
 
 // Генерация по референсу (fal-ai/image-apps-v2/style-transfer)
-export async function generateStyleTransfer(userId, mainFile, refFile, initData, onStep) {
+export async function generateStyleTransfer(userId, mainFile, refFile, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
@@ -369,6 +369,11 @@ export async function generateStyleTransfer(userId, mainFile, refFile, initData,
       style_reference_image_url: refUrl,
       init_data: initData,
     };
+
+    // Добавляем промпт, если он указан
+    if (prompt && prompt.trim().length > 0) {
+      requestData.prompt = prompt.trim();
+    }
 
     step('[4/4] Ожидание генерации от AI...');
     return await apiRequest('generate-style-transfer', requestData, 120000);
@@ -517,4 +522,9 @@ export async function addStarsByUsername(password, username, amount) {
 // Block/unblock user (admin only)
 export async function blockUser(password, username, blocked) {
   return apiRequest('block-user', { password, username, blocked });
+}
+
+// Delete user (admin only)
+export async function deleteUser(password, username) {
+  return apiRequest('delete-user', { password, username });
 }

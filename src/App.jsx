@@ -249,7 +249,7 @@ export default function App() {
           );
           break;
         case 'style_transfer':
-          result = await generateStyleTransfer(userId, photoFile, referenceFile, initData, setDebugStep);
+          result = await generateStyleTransfer(userId, photoFile, referenceFile, promptText, initData, setDebugStep);
           break;
         case 'photo_to_video':
           result = await generateVideo(userId, photoFile, promptText, videoDuration, initData, setDebugStep);
@@ -498,6 +498,9 @@ export default function App() {
               referencePhoto={{ file: referenceFile, preview: referencePreview }}
               onMainPhotoSelected={handlePhotoSelected}
               onReferencePhotoSelected={handleReferenceSelected}
+              promptText={promptText}
+              onPromptChange={setPromptText}
+              promptPlaceholder="Дополнительные детали (необязательно)"
             />
           )}
 

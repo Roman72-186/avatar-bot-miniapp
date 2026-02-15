@@ -6,6 +6,9 @@ export default function ReferencePhotoUpload({
   onMainPhotoSelected,
   onReferencePhotoSelected,
   labels,
+  promptText,
+  onPromptChange,
+  promptPlaceholder,
 }) {
   const mainInputRef = useRef(null);
   const refInputRef = useRef(null);
@@ -80,6 +83,18 @@ export default function ReferencePhotoUpload({
           </div>
         ))}
       </div>
+
+      {onPromptChange && (
+        <div className="reference-prompt-section">
+          <textarea
+            className="reference-prompt-input"
+            placeholder={promptPlaceholder || 'Опишите желаемый результат (необязательно)'}
+            value={promptText || ''}
+            onChange={(e) => onPromptChange(e.target.value)}
+            rows={3}
+          />
+        </div>
+      )}
     </div>
   );
 }
