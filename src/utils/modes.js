@@ -84,16 +84,18 @@ export const MODES = {
     resultType: 'image',
     endpoint: 'generate-text-to-image',
   },
-  // gemini_style: {
-  //   id: 'gemini_style',
-  //   name: 'AI Магия',
-  //   emoji: '🌟',
-  //   description: 'Стиль через Google Gemini',
-  //   starCost: 10,
-  //   hasFree: false,
-  //   resultType: 'image',
-  //   endpoint: 'generate-gemini-style',
-  // },
+  ai_magic: {
+    id: 'ai_magic',
+    name: 'AI Магия',
+    emoji: '🌟',
+    description: 'AI-аватары по фото',
+    starCost: 15,
+    hasFree: false,
+    resultType: 'image',
+    endpoint: 'generate-nanobanana',
+    minPhotos: 2,
+    maxPhotos: 8,
+  },
 };
 
 export const MODE_LIST = Object.values(MODES);

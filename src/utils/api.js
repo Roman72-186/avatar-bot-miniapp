@@ -568,3 +568,32 @@ export async function blockUser(password, username, blocked) {
 export async function deleteUser(password, username) {
   return apiRequest('delete-user', { password, username });
 }
+
+// NanoBanana Pro AI Avatar Generation (2-8 photos)
+export async function generateNanoBanana(userId, files, prompt, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+
+  try {
+    step(`[1/4] Сжатие ${files.length} фото...`);
+    const compressed = await Promise.all(files.map((f) => compressImage(f)));
+
+    step(`[2/4] Загрузка ${compressed.length} фото на S3...`);
+    const photoUrls = await uploadMultipleToFal(compressed);
+
+    step('[3/4] Все фото загружены. Отправка на генерацию AI-аватара...');
+    const requestData = {
+      user_id: userId,
+      mode: 'ai_magic',
+      photos: photoUrls,
+      prompt: prompt || 'Professional high-quality portrait photo of this person, studio lighting, sharp focus',
+      init_data: initData,
+    };
+
+    step('[4/4] Генерация AI-аватара запущена. Ожидайте результат через 30-60 секунд...');
+    return await apiRequest('generate-nanobanana', requestData, 120000);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: NANOBANANA, Error: ${msg}`);
+  }
+}

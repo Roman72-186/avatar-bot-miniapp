@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateFaceSwap, generateRemoveBg, generateEnhance, generateTextToImage, generateGeminiStyle } from './utils/api';
+import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateFaceSwap, generateRemoveBg, generateEnhance, generateTextToImage, generateGeminiStyle, generateNanoBanana } from './utils/api';
 import { STYLES, STARS_PER_GENERATION } from './utils/styles';
 import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
 import PhotoUpload from './components/PhotoUpload';
@@ -199,6 +199,9 @@ export default function App() {
     case 'multi_photo':
       canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 2) && promptText.trim().length > 0;
       break;
+    case 'ai_magic':
+      canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 2);
+      break;
     case 'style_transfer':
       canGenerate = !!(photoFile && referenceFile);
       break;
@@ -244,6 +247,15 @@ export default function App() {
           break;
         case 'multi_photo':
           result = await generateMultiPhoto(
+            userId,
+            photos.filter(Boolean).map((p) => p.file),
+            promptText,
+            initData,
+            setDebugStep
+          );
+          break;
+        case 'ai_magic':
+          result = await generateNanoBanana(
             userId,
             photos.filter(Boolean).map((p) => p.file),
             promptText,
@@ -367,6 +379,7 @@ export default function App() {
   const buttonLabels = {
     stylize: '\u2728 Создать аватарку',
     multi_photo: '\u2728 Сгенерировать',
+    ai_magic: '\ud83c\udf1f Создать AI-аватар',
     style_transfer: '\u2728 Перенести стиль',
     gemini_style: '\ud83c\udf1f Создать с Gemini',
     photo_to_video: '\ud83c\udfac Создать видео',
@@ -494,6 +507,23 @@ export default function App() {
                 value={promptText}
                 onChange={setPromptText}
                 placeholder="Опишите, как объединить фото... Например: объедини лица с фото 1 и 2 в стиле киберпанк"
+              />
+            </>
+          )}
+
+          {/* AI Magic mode (NanoBanana) */}
+          {mode === 'ai_magic' && (
+            <>
+              <MultiPhotoUpload
+                photos={photos}
+                onPhotosChanged={setPhotos}
+                minPhotos={currentMode.minPhotos || 2}
+                maxPhotos={currentMode.maxPhotos || 8}
+              />
+              <PromptInput
+                value={promptText}
+                onChange={setPromptText}
+                placeholder="Опишите желаемый стиль аватара (необязательно)... Например: professional portrait, business suit, studio lighting"
               />
             </>
           )}
