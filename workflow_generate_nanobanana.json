@@ -5,7 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "generate-nanobanana",
-        "responseMode": "onReceived"
+        "responseMode": "lastNode"
       },
       "id": "webhook",
       "name": "Webhook",
