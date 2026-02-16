@@ -112,14 +112,14 @@
       "main": [
         [
           {
-            "node": "send-error",
+            "node": "send-photo",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "send-photo",
+            "node": "send-error",
             "type": "main",
             "index": 0
           }

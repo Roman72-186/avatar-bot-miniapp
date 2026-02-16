@@ -135,14 +135,14 @@
       "main": [
         [
           {
-            "node": "no-balance",
+            "node": "call-nanobanana",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "call-nanobanana",
+            "node": "no-balance",
             "type": "main",
             "index": 0
           }
