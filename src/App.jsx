@@ -203,7 +203,7 @@ export default function App() {
       canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 2);
       break;
     case 'style_transfer':
-      canGenerate = !!(photoFile && referenceFile);
+      canGenerate = !!(photoFile && referenceFile && promptText.trim().length > 0);
       break;
     case 'gemini_style':
       canGenerate = !!(photoFile && referenceFile);
@@ -537,7 +537,7 @@ export default function App() {
               onReferencePhotoSelected={handleReferenceSelected}
               promptText={promptText}
               onPromptChange={setPromptText}
-              promptPlaceholder="Дополнительные детали (необязательно)"
+              promptPlaceholder="Опишите желаемый стиль или результат..."
             />
           )}
 
