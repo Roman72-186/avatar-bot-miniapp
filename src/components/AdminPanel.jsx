@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { getAdminStats, addStarsByUsername, blockUser, deleteUser } from '../utils/api';
+import { useState, useEffect, useCallback } from 'react';
+import { getAdminStats, addStarsByUsername, blockUser, deleteUser, broadcastPreview, broadcastSend } from '../utils/api';
 import { useTelegram } from '../hooks/useTelegram';
 
 export default function AdminPanel({ adminPassword, onClose }) {
-  const { hapticFeedback } = useTelegram();
+  const { hapticFeedback, userId } = useTelegram();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,6 +14,64 @@ export default function AdminPanel({ adminPassword, onClose }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [blockLoading, setBlockLoading] = useState(false);
+
+  // Broadcast state
+  const [showBroadcast, setShowBroadcast] = useState(false);
+  const [bcText, setBcText] = useState('');
+  const [bcPhotoUrl, setBcPhotoUrl] = useState('');
+  const [bcButtons, setBcButtons] = useState([]);
+  const [bcFilter, setBcFilter] = useState('all');
+  const [bcSchedule, setBcSchedule] = useState('');
+  const [bcRecipientCount, setBcRecipientCount] = useState(null);
+  const [bcCountLoading, setBcCountLoading] = useState(false);
+  const [bcSending, setBcSending] = useState(false);
+  const [bcResult, setBcResult] = useState(null);
+
+  const loadRecipientCount = useCallback(async (filter) => {
+    setBcCountLoading(true);
+    try {
+      const res = await broadcastPreview(adminPassword, filter);
+      const data = Array.isArray(res) ? res[0] : res;
+      setBcRecipientCount(data?.count ?? null);
+    } catch { setBcRecipientCount(null); }
+    finally { setBcCountLoading(false); }
+  }, [adminPassword]);
+
+  useEffect(() => {
+    if (showBroadcast) loadRecipientCount(bcFilter);
+  }, [showBroadcast, bcFilter, loadRecipientCount]);
+
+  const handleBroadcastSend = async (testMode = false) => {
+    if (!bcText.trim()) return;
+    setBcSending(true);
+    setBcResult(null);
+    try {
+      const res = await broadcastSend(adminPassword, {
+        messageText: bcText,
+        photoUrl: bcPhotoUrl || undefined,
+        buttons: bcButtons.filter(b => b.text && b.url),
+        filterType: bcFilter,
+        testUserId: testMode ? String(userId) : undefined,
+        scheduleAt: !testMode && bcSchedule ? bcSchedule : undefined,
+      });
+      const data = Array.isArray(res) ? res[0] : res;
+      setBcResult(data);
+    } catch (e) {
+      setBcResult({ error: true, message: e.message });
+    } finally {
+      setBcSending(false);
+    }
+  };
+
+  const addButton = () => {
+    if (bcButtons.length < 3) setBcButtons([...bcButtons, { text: '', url: '' }]);
+  };
+  const updateButton = (i, field, val) => {
+    const copy = [...bcButtons];
+    copy[i][field] = val;
+    setBcButtons(copy);
+  };
+  const removeButton = (i) => setBcButtons(bcButtons.filter((_, idx) => idx !== i));
 
   useEffect(() => {
     loadStats();
@@ -125,6 +183,165 @@ export default function AdminPanel({ adminPassword, onClose }) {
       setActionLoading(false);
     }
   };
+
+  // Broadcast view
+  if (showBroadcast) {
+    const FILTERS = [
+      { value: 'all', label: 'Все' },
+      { value: 'has_balance', label: 'С балансом' },
+      { value: 'zero_balance', label: 'Нулевой баланс' },
+      { value: 'new_7d', label: 'Новые 7д' },
+      { value: 'new_24h', label: 'Новые 24ч' },
+    ];
+
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="admin-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="admin-header">
+            <button
+              onClick={() => { setShowBroadcast(false); setBcResult(null); }}
+              style={{ background: 'none', border: 'none', color: 'var(--text-hint)', fontSize: '14px', cursor: 'pointer', padding: '4px 8px' }}
+            >
+              ← Назад
+            </button>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 600 }}>Рассылка</span>
+          </div>
+
+          {/* Message text */}
+          <textarea
+            className="admin-input"
+            placeholder="Текст сообщения (HTML: <b>, <i>, <a>)..."
+            value={bcText}
+            onChange={(e) => setBcText(e.target.value)}
+            rows={4}
+            style={{ resize: 'vertical', minHeight: '80px', marginBottom: '8px' }}
+          />
+
+          {/* Photo URL */}
+          <input
+            className="admin-input"
+            placeholder="URL фото (необязательно)"
+            value={bcPhotoUrl}
+            onChange={(e) => setBcPhotoUrl(e.target.value)}
+          />
+
+          {/* Inline buttons */}
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-hint)', marginBottom: '6px' }}>
+              Кнопки ({bcButtons.length}/3)
+            </div>
+            {bcButtons.map((btn, i) => (
+              <div key={i} style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                <input
+                  className="admin-input"
+                  placeholder="Текст"
+                  value={btn.text}
+                  onChange={(e) => updateButton(i, 'text', e.target.value)}
+                  style={{ flex: 1, marginBottom: 0 }}
+                />
+                <input
+                  className="admin-input"
+                  placeholder="URL"
+                  value={btn.url}
+                  onChange={(e) => updateButton(i, 'url', e.target.value)}
+                  style={{ flex: 2, marginBottom: 0 }}
+                />
+                <button
+                  onClick={() => removeButton(i)}
+                  style={{ background: 'rgba(255,0,0,0.15)', border: '1px solid rgba(255,0,0,0.3)', color: '#f06060', borderRadius: '8px', padding: '0 10px', cursor: 'pointer', fontSize: '16px' }}
+                >×</button>
+              </div>
+            ))}
+            {bcButtons.length < 3 && (
+              <button
+                onClick={addButton}
+                style={{ background: 'none', border: '1px dashed var(--card-border)', color: 'var(--text-hint)', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', width: '100%' }}
+              >+ Добавить кнопку</button>
+            )}
+          </div>
+
+          {/* Filter */}
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-hint)', marginBottom: '6px' }}>Аудитория</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+              {FILTERS.map(f => (
+                <button
+                  key={f.value}
+                  onClick={() => setBcFilter(f.value)}
+                  className={`admin-action-btn${bcFilter === f.value ? ' active-green' : ''}`}
+                  style={{ fontSize: '11px', padding: '6px 10px' }}
+                >{f.label}</button>
+              ))}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--accent)', marginTop: '6px' }}>
+              {bcCountLoading ? 'Подсчёт...' : bcRecipientCount !== null ? `Получателей: ${bcRecipientCount}` : ''}
+            </div>
+          </div>
+
+          {/* Schedule */}
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-hint)', marginBottom: '6px' }}>Отложенная отправка</div>
+            <input
+              type="datetime-local"
+              className="admin-input"
+              value={bcSchedule}
+              onChange={(e) => setBcSchedule(e.target.value)}
+              style={{ marginBottom: 0 }}
+            />
+            {bcSchedule && (
+              <button
+                onClick={() => setBcSchedule('')}
+                style={{ background: 'none', border: 'none', color: 'var(--text-hint)', fontSize: '11px', cursor: 'pointer', padding: '4px 0' }}
+              >Очистить (отправить сейчас)</button>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <button
+              className="admin-action-btn"
+              onClick={() => handleBroadcastSend(true)}
+              disabled={bcSending || !bcText.trim()}
+              style={{ fontSize: '12px', padding: '10px' }}
+            >
+              {bcSending ? '...' : 'Тест себе'}
+            </button>
+            <button
+              className="admin-action-btn active-green"
+              onClick={() => {
+                const count = bcRecipientCount || '?';
+                const action = bcSchedule ? 'запланировать' : 'отправить';
+                if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} рассылку ${count} пользователям?`)) return;
+                handleBroadcastSend(false);
+              }}
+              disabled={bcSending || !bcText.trim()}
+              style={{ fontSize: '12px', padding: '10px' }}
+            >
+              {bcSending ? 'Отправка...' : bcSchedule ? 'Запланировать' : 'Отправить'}
+            </button>
+          </div>
+
+          {/* Result */}
+          {bcResult && (
+            <div style={{
+              padding: '10px',
+              background: bcResult.error ? 'rgba(255,0,0,0.1)' : 'rgba(0,255,0,0.1)',
+              borderRadius: '8px', fontSize: '13px', lineHeight: '1.5',
+            }}>
+              {bcResult.error
+                ? `Ошибка: ${bcResult.message}`
+                : bcResult.status === 'test_sent'
+                  ? 'Тестовое сообщение отправлено!'
+                  : bcResult.status === 'scheduled'
+                    ? `Запланировано! ID: ${bcResult.broadcast_id}`
+                    : `Отправлено: ${bcResult.sent || 0}, Ошибки: ${bcResult.failed || 0}, Заблокировали бота: ${bcResult.blocked || 0}`
+              }
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // User detail view
   if (selectedUser) {
@@ -329,9 +546,17 @@ export default function AdminPanel({ adminPassword, onClose }) {
               </div>
             )}
 
-            <button className="action-btn" onClick={loadStats} style={{ marginTop: '16px', width: '100%' }}>
-              Обновить
-            </button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '16px' }}>
+              <button className="action-btn" onClick={loadStats}>
+                Обновить
+              </button>
+              <button
+                className="action-btn primary"
+                onClick={() => { setShowBroadcast(true); setBcResult(null); hapticFeedback('medium'); }}
+              >
+                Рассылка
+              </button>
+            </div>
           </div>
         )}
       </div>

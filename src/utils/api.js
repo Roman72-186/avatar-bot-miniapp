@@ -586,6 +586,24 @@ export async function deleteUser(password, username, userId) {
   return apiRequest('delete-user', { password, username: username || undefined, user_id: userId });
 }
 
+// Broadcast: preview recipient count
+export async function broadcastPreview(password, filterType) {
+  return apiRequest('admin-broadcast-preview', { password, filter_type: filterType || 'all' }, 15000, 0);
+}
+
+// Broadcast: send or schedule
+export async function broadcastSend(password, { messageText, photoUrl, buttons, filterType, testUserId, scheduleAt }) {
+  return apiRequest('admin-broadcast', {
+    password,
+    message_text: messageText,
+    photo_url: photoUrl || undefined,
+    buttons: buttons?.length ? buttons : undefined,
+    filter_type: filterType || 'all',
+    test_user_id: testUserId || undefined,
+    schedule_at: scheduleAt || undefined,
+  }, 300000, 0);
+}
+
 // NanoBanana Pro AI Avatar Generation (2-8 photos)
 export async function generateNanoBanana(userId, files, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
