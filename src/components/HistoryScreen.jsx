@@ -4,7 +4,7 @@ import { getGenerations as getCachedGenerations, deleteGenerationByUrl } from '.
 import { MODES } from '../utils/modes';
 import { useTelegram } from '../hooks/useTelegram';
 
-export default function HistoryScreen({ userId, onBack }) {
+export default function HistoryScreen({ userId, initData, onBack }) {
   const { hapticFeedback, tg } = useTelegram();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +21,7 @@ export default function HistoryScreen({ userId, onBack }) {
 
     // Затем загружаем из БД
     if (userId) {
-      getUserGenerations(userId)
+      getUserGenerations(userId, initData)
         .then(data => {
           const gens = data?.generations || (Array.isArray(data) ? data : []);
           if (gens.length > 0) {
@@ -74,7 +74,7 @@ export default function HistoryScreen({ userId, onBack }) {
     try {
       // Удаляем из БД (если есть id)
       if (item.id && userId) {
-        await deleteUserGeneration(userId, item.id).catch(() => {});
+        await deleteUserGeneration(userId, item.id, initData).catch(() => {});
       }
       // Удаляем из localStorage
       deleteGenerationByUrl(item.result_url);

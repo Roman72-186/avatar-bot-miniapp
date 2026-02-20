@@ -27,30 +27,35 @@ export const MODES = {
     name: 'По референсу',
     emoji: '🪄',
     description: 'Перенеси стиль с референса',
-    starCost: 7,
+    starCost: { '2_2K': 8, '2_4K': 16, '3_2K': 12, '3_4K': 24 },
     hasFree: false,
     resultType: 'image',
     endpoint: 'generate-style-transfer',
+    minPhotos: 2,
+    maxPhotos: 4,
   },
   photo_to_video: {
     id: 'photo_to_video',
     name: 'Фото в видео',
     emoji: '🎬',
     description: 'Оживи фото в видео',
-    starCost: { 6: 25, 10: 50 },
+    starCost: {
+      '5_std_off': 50, '5_std_on': 70, '5_pro_off': 65, '5_pro_on': 95,
+      '10_std_off': 100, '10_std_on': 140, '10_pro_off': 130, '10_pro_on': 190,
+    },
     hasFree: false,
     resultType: 'video',
     endpoint: 'generate-video',
   },
-  face_swap: {
-    id: 'face_swap',
-    name: 'Face Swap',
-    emoji: '🔄',
-    description: 'Замени лицо на другом фото',
-    starCost: 5,
+  lip_sync: {
+    id: 'lip_sync',
+    name: 'Lip Sync',
+    emoji: '🗣️',
+    description: 'Фото говорит твоим голосом',
+    starCost: 50,
     hasFree: false,
-    resultType: 'image',
-    endpoint: 'generate-face-swap',
+    resultType: 'video',
+    endpoint: 'generate-lip-sync',
   },
   remove_bg: {
     id: 'remove_bg',
@@ -105,8 +110,17 @@ export function getStarCost(modeId, options = {}) {
   const mode = MODES[modeId];
   if (!mode) return 0;
   if (typeof mode.starCost === 'number') return mode.starCost;
-  if (typeof mode.starCost === 'object' && options.duration) {
-    return mode.starCost[options.duration] || 25;
+  if (typeof mode.starCost === 'object') {
+    // Video pricing: duration + quality + sound
+    if (options.duration && options.videoQuality !== undefined) {
+      const key = `${options.duration}_${options.videoQuality}_${options.videoSound ? 'on' : 'off'}`;
+      return mode.starCost[key] || 50;
+    }
+    // Style transfer: photoCount + resolution
+    if (options.photoCount !== undefined && options.resolution) {
+      const bucket = options.photoCount <= 2 ? '2' : '3';
+      return mode.starCost[`${bucket}_${options.resolution}`] || 8;
+    }
   }
   return 25;
 }

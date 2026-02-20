@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getReferralStats } from '../utils/api';
 import { useTelegram } from '../hooks/useTelegram';
 
-export default function ReferralScreen({ userId, onBack, onInvite }) {
+export default function ReferralScreen({ userId, initData, onBack, onInvite }) {
   const { hapticFeedback } = useTelegram();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -10,7 +10,7 @@ export default function ReferralScreen({ userId, onBack, onInvite }) {
 
   useEffect(() => {
     if (userId) {
-      getReferralStats(userId)
+      getReferralStats(userId, initData)
         .then(data => {
           const s = Array.isArray(data) ? data[0] : data;
           setStats(s);

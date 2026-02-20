@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateFaceSwap, generateRemoveBg, generateEnhance, generateTextToImage, generateGeminiStyle, generateNanoBanana } from './utils/api';
+import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateLipSync, generateRemoveBg, generateEnhance, generateTextToImage, generateGeminiStyle, generateNanoBanana, validateAdminPassword } from './utils/api';
 import { STYLES, STARS_PER_GENERATION } from './utils/styles';
 import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
 import PhotoUpload from './components/PhotoUpload';
@@ -14,6 +14,8 @@ import MultiPhotoUpload from './components/MultiPhotoUpload';
 import ReferencePhotoUpload from './components/ReferencePhotoUpload';
 import PromptInput from './components/PromptInput';
 import DurationSelector from './components/DurationSelector';
+import ResolutionSelector from './components/ResolutionSelector';
+import StyleTransferUpload from './components/StyleTransferUpload';
 import AdminPanel from './components/AdminPanel';
 import HistoryScreen from './components/HistoryScreen';
 import ReferralScreen from './components/ReferralScreen';
@@ -53,7 +55,16 @@ export default function App() {
   const [referenceFile, setReferenceFile] = useState(null);
   const [referencePreview, setReferencePreview] = useState(null);
   const [promptText, setPromptText] = useState('');
-  const [videoDuration, setVideoDuration] = useState('6');
+  const [videoDuration, setVideoDuration] = useState('5');
+  const [videoQuality, setVideoQuality] = useState('std');
+  const [videoSound, setVideoSound] = useState(false);
+  const [videoAspect, setVideoAspect] = useState('9:16');
+  const [lastFrameFile, setLastFrameFile] = useState(null);
+  const [lastFramePreview, setLastFramePreview] = useState(null);
+  const [audioFile, setAudioFile] = useState(null);
+  const [audioName, setAudioName] = useState(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
+  const audioInputRef = useRef(null);
   const [resultType, setResultType] = useState('image');
   const [resultVideo, setResultVideo] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -62,6 +73,7 @@ export default function App() {
   const [aiClickCount, setAiClickCount] = useState(0);
   const [aiClickTimer, setAiClickTimer] = useState(null);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [styleResolution, setStyleResolution] = useState('2K');
 
   const handleAiClick = () => {
     const newCount = aiClickCount + 1;
@@ -80,14 +92,30 @@ export default function App() {
     }
   };
 
-  const handleAdminPasswordSubmit = () => {
-    if (adminPassword === '123hors456') {
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState('');
+
+  const handleAdminPasswordSubmit = async () => {
+    if (!adminPassword.trim()) return;
+    setAdminLoading(true);
+    setAdminError('');
+    try {
+      const result = await validateAdminPassword(adminPassword);
+      const data = Array.isArray(result) ? result[0] : result;
+      if (data?.error) {
+        setAdminError(data.message || 'Access denied');
+        hapticFeedback('medium');
+        return;
+      }
+      // Server accepted the password
       setShowPasswordModal(false);
       setShowAdmin(true);
       hapticFeedback('heavy');
-    } else {
-      hapticFeedback('error');
-      setAdminPassword('');
+    } catch (e) {
+      setAdminError('Неверный пароль или ошибка сервера');
+      hapticFeedback('medium');
+    } finally {
+      setAdminLoading(false);
     }
   };
 
@@ -154,6 +182,13 @@ export default function App() {
     hapticFeedback('light');
   };
 
+  const clearAudio = () => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    setAudioFile(null);
+    setAudioName(null);
+    setAudioPreviewUrl(null);
+  };
+
   const handleStyleSelect = (styleId) => {
     setSelectedStyle(styleId);
     hapticFeedback('light');
@@ -169,13 +204,20 @@ export default function App() {
     setReferenceFile(null);
     setReferencePreview(null);
     setPromptText('');
-    setVideoDuration('6');
+    setVideoDuration('5');
+    setVideoQuality('std');
+    setVideoSound(false);
+    setVideoAspect('9:16');
+    setLastFrameFile(null);
+    setLastFramePreview(null);
+    clearAudio();
+    setStyleResolution('2K');
     hapticFeedback('light');
   };
 
   const handleTopUp = async (amount) => {
     try {
-      const { invoice_link } = await createInvoice(userId, amount || topUpAmount);
+      const { invoice_link } = await createInvoice(userId, amount || topUpAmount, initData);
       const status = await openInvoice(invoice_link);
       if (status === 'paid') {
         hapticFeedback('heavy');
@@ -189,7 +231,13 @@ export default function App() {
 
   // Compute canGenerate based on mode
   const currentMode = MODES[mode];
-  const starCost = getStarCost(mode, { duration: videoDuration });
+  const starCost = getStarCost(mode, {
+    duration: videoDuration,
+    videoQuality,
+    videoSound,
+    photoCount: photos.filter(Boolean).length,
+    resolution: styleResolution,
+  });
   const freeLeft = (freeGens && currentMode.freeKey) ? (freeGens[currentMode.freeKey] || 0) : 0;
   let canGenerate = false;
   switch (mode) {
@@ -203,7 +251,7 @@ export default function App() {
       canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 2);
       break;
     case 'style_transfer':
-      canGenerate = !!(photoFile && referenceFile && promptText.trim().length > 0);
+      canGenerate = photos.filter(Boolean).length >= 2 && promptText.trim().length > 0;
       break;
     case 'gemini_style':
       canGenerate = !!(photoFile && referenceFile);
@@ -211,8 +259,8 @@ export default function App() {
     case 'photo_to_video':
       canGenerate = !!(photoFile && promptText.trim().length > 0);
       break;
-    case 'face_swap':
-      canGenerate = !!(photoFile && referenceFile);
+    case 'lip_sync':
+      canGenerate = !!(photoFile && audioFile);
       break;
     case 'remove_bg':
     case 'enhance':
@@ -264,16 +312,25 @@ export default function App() {
           );
           break;
         case 'style_transfer':
-          result = await generateStyleTransfer(userId, photoFile, referenceFile, promptText, initData, setDebugStep);
+          result = await generateStyleTransfer(
+            userId,
+            photos.filter(Boolean).map((p) => p.file),
+            promptText,
+            styleResolution,
+            initData,
+            setDebugStep
+          );
           break;
         case 'gemini_style':
           result = await generateGeminiStyle(userId, photoFile, referenceFile, promptText, initData, setDebugStep);
           break;
         case 'photo_to_video':
-          result = await generateVideo(userId, photoFile, promptText, videoDuration, initData, setDebugStep);
+          result = await generateVideo(userId, photoFile, promptText, videoDuration, {
+            quality: videoQuality, sound: videoSound, aspect: videoAspect, lastFrameFile,
+          }, initData, setDebugStep);
           break;
-        case 'face_swap':
-          result = await generateFaceSwap(userId, photoFile, referenceFile, initData, setDebugStep);
+        case 'lip_sync':
+          result = await generateLipSync(userId, photoFile, audioFile, promptText, initData, setDebugStep);
           break;
         case 'remove_bg':
           result = await generateRemoveBg(userId, photoFile, initData, setDebugStep);
@@ -370,7 +427,14 @@ export default function App() {
     setReferenceFile(null);
     setReferencePreview(null);
     setPromptText('');
-    setVideoDuration('6');
+    setVideoDuration('5');
+    setVideoQuality('std');
+    setVideoSound(false);
+    setVideoAspect('9:16');
+    setLastFrameFile(null);
+    setLastFramePreview(null);
+    clearAudio();
+    setStyleResolution('2K');
     setError(null);
     // Keep mode selection
   };
@@ -383,7 +447,7 @@ export default function App() {
     style_transfer: '\u2728 Перенести стиль',
     gemini_style: '\ud83c\udf1f Создать с Gemini',
     photo_to_video: '\ud83c\udfac Создать видео',
-    face_swap: '\ud83d\udd04 Заменить лицо',
+    lip_sync: '\ud83d\udde3\ufe0f Создать Lip Sync',
     remove_bg: '\u2702\ufe0f Убрать фон',
     enhance: '\u2728 Улучшить',
     text_to_image: '\ud83d\udcac Создать',
@@ -417,7 +481,7 @@ export default function App() {
           <h2>Ошибка</h2>
           <p>{error}</p>
           {errorDetails && (
-            <div style={{ fontSize: '11px', color: '#888', marginTop: '10px', padding: '10px', background: '#1a1a1a', borderRadius: '8px', wordBreak: 'break-word', fontFamily: 'monospace' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-hint)', marginTop: '10px', padding: '10px', background: 'var(--bg-secondary)', borderRadius: '8px', wordBreak: 'break-word', fontFamily: 'monospace' }}>
               {errorDetails}
             </div>
           )}
@@ -431,35 +495,23 @@ export default function App() {
         <div className="main-screen">
           <header className="app-header">
             <h1 className="app-title">
-              <span className="title-accent" onClick={handleAiClick}>AI</span> Avatar Studio
+              <span className="title-accent" onClick={handleAiClick}>AI</span> DEVELOPERS
             </h1>
             <p className="app-subtitle">{currentMode.description}</p>
             {freeGens !== null && (
-              <div className="header-balance">
-                {currentMode.hasFree && freeLeft > 0 && (
-                  <span className="header-free free-available">
-                    1 бесплатная
-                  </span>
-                )}
-                {currentMode.hasFree && freeLeft <= 0 && (
-                  <span className="header-free">
-                    {starCost} ⭐ · бесплатная использована
-                  </span>
-                )}
-                {!currentMode.hasFree && (
-                  <span className="header-free">
-                    {starCost} ⭐ за генерацию
-                  </span>
-                )}
-                <span className="header-stars" onClick={() => setShowTopUp(true)}>
-                  ⭐ {starBalance || 0}
-                </span>
-                <span className="header-history-btn" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.HISTORY); }}>
-                  🕐 История
-                </span>
-                <span className="header-invite-btn" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.REFERRAL); }}>
-                  🎁 Рефералы
-                </span>
+              <div className="header-actions">
+                <button className="header-action-btn stars" onClick={() => setShowTopUp(true)}>
+                  <span className="header-action-icon">⭐</span>
+                  <span className="header-action-label">{starBalance || 0}</span>
+                </button>
+                <button className="header-action-btn" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.HISTORY); }}>
+                  <span className="header-action-icon">🕐</span>
+                  <span className="header-action-label">История</span>
+                </button>
+                <button className="header-action-btn referral" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.REFERRAL); }}>
+                  <span className="header-action-icon">🎁</span>
+                  <span className="header-action-label">Рефералы</span>
+                </button>
               </div>
             )}
           </header>
@@ -530,15 +582,22 @@ export default function App() {
 
           {/* Style transfer mode */}
           {mode === 'style_transfer' && (
-            <ReferencePhotoUpload
-              mainPhoto={{ file: photoFile, preview: photoPreview }}
-              referencePhoto={{ file: referenceFile, preview: referencePreview }}
-              onMainPhotoSelected={handlePhotoSelected}
-              onReferencePhotoSelected={handleReferenceSelected}
-              promptText={promptText}
-              onPromptChange={setPromptText}
-              promptPlaceholder="Опишите желаемый стиль или результат..."
-            />
+            <>
+              <StyleTransferUpload
+                photos={photos}
+                onPhotosChanged={setPhotos}
+                promptText={promptText}
+                onPromptChange={setPromptText}
+                promptPlaceholder="Опишите желаемый стиль или результат..."
+              />
+              {photos.filter(Boolean).length >= 2 && (
+                <ResolutionSelector
+                  selectedResolution={styleResolution}
+                  onResolutionSelect={setStyleResolution}
+                  starCostFn={(res) => getStarCost(mode, { photoCount: photos.filter(Boolean).length, resolution: res })}
+                />
+              )}
+            </>
           )}
 
           {/* Photo to video mode */}
@@ -555,7 +614,36 @@ export default function App() {
                   <DurationSelector
                     selectedDuration={videoDuration}
                     onDurationSelect={setVideoDuration}
+                    videoQuality={videoQuality}
+                    onQualitySelect={setVideoQuality}
+                    videoSound={videoSound}
+                    onSoundToggle={setVideoSound}
+                    videoAspect={videoAspect}
+                    onAspectSelect={setVideoAspect}
                   />
+                  <div className="last-frame-section">
+                    <div className="last-frame-label">Конечный кадр <span className="optional-tag">необязательно</span></div>
+                    <p className="last-frame-hint">Загрузите второе фото — AI создаст плавный переход от первого к последнему кадру</p>
+                    {lastFramePreview ? (
+                      <div className="last-frame-preview">
+                        <img src={lastFramePreview} alt="Last frame" />
+                        <button className="last-frame-remove" onClick={() => { setLastFrameFile(null); setLastFramePreview(null); }}>✕</button>
+                      </div>
+                    ) : (
+                      <label className="last-frame-upload-btn">
+                        + Добавить фото
+                        <input type="file" accept="image/*" hidden onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            setLastFrameFile(f);
+                            const reader = new FileReader();
+                            reader.onload = (ev) => setLastFramePreview(ev.target.result);
+                            reader.readAsDataURL(f);
+                          }
+                        }} />
+                      </label>
+                    )}
+                  </div>
                 </>
               )}
             </>
@@ -574,15 +662,64 @@ export default function App() {
             />
           )}
 
-          {/* Face swap mode */}
-          {mode === 'face_swap' && (
-            <ReferencePhotoUpload
-              mainPhoto={{ file: photoFile, preview: photoPreview }}
-              referencePhoto={{ file: referenceFile, preview: referencePreview }}
-              onMainPhotoSelected={handlePhotoSelected}
-              onReferencePhotoSelected={handleReferenceSelected}
-              labels={{ main: 'Ваше лицо', reference: 'Целевое фото' }}
-            />
+          {/* Lip Sync mode */}
+          {mode === 'lip_sync' && (
+            <>
+              <PhotoUpload onPhotoSelected={handlePhotoSelected} />
+              {photoFile && (
+                <>
+                  <div className="audio-upload-section">
+                    <div className="audio-upload-label">Аудио <span className="audio-limit-tag">до 15 сек</span></div>
+                    <p className="audio-upload-hint">
+                      Загрузите голосовое сообщение или аудиофайл (mp3, ogg, m4a) — фото будет говорить этим голосом
+                    </p>
+
+                    {audioFile ? (
+                      <div className="audio-ready">
+                        <div className="audio-file-info">
+                          <span className="audio-file-icon">🎵</span>
+                          <span className="audio-file-name">{audioName}</span>
+                          <button className="audio-file-remove" onClick={clearAudio}>✕</button>
+                        </div>
+                        {audioPreviewUrl && (
+                          <audio className="audio-player" src={audioPreviewUrl} controls />
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          ref={audioInputRef}
+                          type="file"
+                          accept="*/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              setAudioFile(f);
+                              setAudioName(f.name);
+                              setAudioPreviewUrl(URL.createObjectURL(f));
+                              hapticFeedback('light');
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                        <button
+                          className="audio-upload-btn audio-upload-btn-full"
+                          onClick={() => audioInputRef.current?.click()}
+                        >
+                          🎤 Загрузить аудио
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <PromptInput
+                    value={promptText}
+                    onChange={setPromptText}
+                    placeholder="Опишите выражение лица (необязательно)... Например: улыбается, смотрит в камеру"
+                  />
+                </>
+              )}
+            </>
           )}
 
           {/* Remove BG / Enhance modes */}
@@ -650,22 +787,26 @@ export default function App() {
       )}
 
       {showPasswordModal && (
-        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowPasswordModal(false); setAdminError(''); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>Admin Access</h3>
             <input
               type="password"
               className="topup-input"
               value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAdminPasswordSubmit()}
+              onChange={(e) => { setAdminPassword(e.target.value); setAdminError(''); }}
+              onKeyDown={(e) => e.key === 'Enter' && !adminLoading && handleAdminPasswordSubmit()}
               placeholder="Password"
               autoFocus
+              disabled={adminLoading}
             />
-            <button className="topup-confirm-btn" onClick={handleAdminPasswordSubmit}>
-              Login
+            {adminError && (
+              <div style={{ color: '#ff6b6b', fontSize: '13px', marginTop: '8px' }}>{adminError}</div>
+            )}
+            <button className="topup-confirm-btn" onClick={handleAdminPasswordSubmit} disabled={adminLoading}>
+              {adminLoading ? 'Проверка...' : 'Login'}
             </button>
-            <button className="modal-close-btn" onClick={() => setShowPasswordModal(false)}>
+            <button className="modal-close-btn" onClick={() => { setShowPasswordModal(false); setAdminError(''); }}>
               Cancel
             </button>
           </div>
@@ -675,6 +816,7 @@ export default function App() {
       {screen === SCREENS.HISTORY && (
         <HistoryScreen
           userId={userId}
+          initData={initData}
           onBack={() => setScreen(SCREENS.MAIN)}
         />
       )}
@@ -682,12 +824,13 @@ export default function App() {
       {screen === SCREENS.REFERRAL && (
         <ReferralScreen
           userId={userId}
+          initData={initData}
           onBack={() => setScreen(SCREENS.MAIN)}
           onInvite={handleShareInvite}
         />
       )}
 
-      {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
+      {showAdmin && <AdminPanel adminPassword={adminPassword} onClose={() => { setShowAdmin(false); setAdminPassword(''); }} />}
     </div>
   );
 }

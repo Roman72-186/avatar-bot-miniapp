@@ -19,8 +19,9 @@ const MESSAGES_BY_MODE = {
     'Анализирую стиль референса... 🔍',
     'Извлекаю палитру... 🎨',
     'Переношу стиль... 🪄',
-    'Добавляю детали... ✏️',
-    'Финальные штрихи... 🌟',
+    'Обрабатываю детали... ✏️',
+    'Рендерю результат... ⚡',
+    'Почти готово... 🌟',
   ],
   photo_to_video: [
     'Анализирую фото... 🔍',
@@ -30,11 +31,13 @@ const MESSAGES_BY_MODE = {
     'Рендерю видео... ⚡',
     'Почти готово... 🌟',
   ],
-  face_swap: [
-    'Анализирую лица... 🔍',
-    'Выделяю черты... 🎭',
-    'Совмещаю лица... 🔄',
-    'Финальные штрихи... 🌟',
+  lip_sync: [
+    'Анализирую фото... 🔍',
+    'Обрабатываю аудио... 🎵',
+    'Синхронизирую губы... 🗣️',
+    'Создаю анимацию... 🎬',
+    'Рендерю видео... ⚡',
+    'Почти готово... 🌟',
   ],
   remove_bg: [
     'Анализирую фото... 🔍',
@@ -56,14 +59,14 @@ const MESSAGES_BY_MODE = {
 };
 
 const HINTS = {
-  stylize: 'Обычно занимает 10–20 секунд',
-  multi_photo: 'Обычно занимает 15–30 секунд',
-  style_transfer: 'Обычно занимает 10–20 секунд',
+  stylize: 'Обычно занимает 20–40 секунд',
+  multi_photo: 'Обычно занимает 30–60 секунд',
+  style_transfer: 'Генерация может занять несколько минут',
   photo_to_video: 'Обычно занимает 1–3 минуты',
-  face_swap: 'Обычно занимает 10–20 секунд',
-  remove_bg: 'Обычно занимает 5–10 секунд',
+  lip_sync: 'Обычно занимает 1–3 минуты',
+  remove_bg: 'Обычно занимает 15–30 секунд',
   enhance: 'Обычно занимает 15–30 секунд',
-  text_to_image: 'Обычно занимает 10–20 секунд',
+  text_to_image: 'Обычно занимает 20–40 секунд',
 };
 
 export default function LoadingScreen({ mode = 'stylize' }) {
@@ -72,7 +75,7 @@ export default function LoadingScreen({ mode = 'stylize' }) {
 
   const messages = MESSAGES_BY_MODE[mode] || MESSAGES_BY_MODE.stylize;
   const hint = HINTS[mode] || HINTS.stylize;
-  const isVideo = mode === 'photo_to_video';
+  const isSlowMode = mode === 'photo_to_video' || mode === 'style_transfer' || mode === 'multi_photo' || mode === 'text_to_image' || mode === 'stylize' || mode === 'lip_sync';
 
   useEffect(() => {
     setMessageIndex(0);
@@ -82,17 +85,17 @@ export default function LoadingScreen({ mode = 'stylize' }) {
   useEffect(() => {
     const msgInterval = setInterval(() => {
       setMessageIndex((i) => (i + 1) % messages.length);
-    }, isVideo ? 5000 : 3000);
+    }, isSlowMode ? 5000 : 3000);
 
     const progressInterval = setInterval(() => {
-      setProgress((p) => Math.min(p + Math.random() * (isVideo ? 3 : 8), 95));
-    }, isVideo ? 1000 : 500);
+      setProgress((p) => Math.min(p + Math.random() * (isSlowMode ? 3 : 8), 95));
+    }, isSlowMode ? 1000 : 500);
 
     return () => {
       clearInterval(msgInterval);
       clearInterval(progressInterval);
     };
-  }, [messages.length, isVideo]);
+  }, [messages.length, isSlowMode]);
 
   return (
     <div className="loading-screen">

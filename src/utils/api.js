@@ -4,9 +4,6 @@ import { STYLES } from './styles.js';
 // n8n webhook base URL
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://n8n.creativeanalytic.ru/webhook';
 
-// fal.ai credentials
-const FAL_KEY = '0945b3eb-a693-44de-a7cb-85d3a8a1a437:6391f113a7c37f4da6a2e1ebda28d7bd';
-
 // Задержка между повторными попытками
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -29,8 +26,8 @@ function getFriendlyErrorMessage(error, endpoint) {
     return 'Сервер временно недоступен. Попробуйте через несколько секунд.';
   }
 
-  // Ошибки fal.ai
-  if (msg.includes('fal.ai') || msg.includes('generation_failed')) {
+  // Ошибки AI генерации
+  if (msg.includes('fal.ai') || msg.includes('kie.ai') || msg.includes('generation_failed')) {
     return 'Ошибка генерации AI. Попробуйте снова или выберите другие параметры.';
   }
 
@@ -99,29 +96,6 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetr
 
   // На случай если цикл завершился без return (не должно произойти)
   throw lastError || new Error('Unknown error');
-}
-
-// Read file/blob as ArrayBuffer (Android WebView compatible)
-function readAsArrayBuffer(file) {
-  return new Promise((resolve, reject) => {
-    if (typeof file.arrayBuffer === 'function') {
-      file.arrayBuffer().then(resolve).catch(reject);
-      return;
-    }
-    // Fallback for older Android WebView
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('FileReader failed'));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-// Определяем Android Telegram WebView (CORS блокирует прямую загрузку на fal.ai)
-function isAndroidTelegram() {
-  try {
-    const ua = navigator.userAgent || '';
-    return /Android/i.test(ua) && (/TelegramWebview/i.test(ua) || /Telegram/i.test(ua) || window.Telegram?.WebApp);
-  } catch { return false; }
 }
 
 // Загрузка фото на S3 через микросервис
@@ -255,36 +229,31 @@ function fileToBase64(file) {
   });
 }
 
-// Запрос генерации аватарки
+// Запрос генерации аватарки (Kie.ai flux-2/pro-image-to-image)
 export async function generateAvatar(userId, file, style, initData, creativity = 50, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step('[1/5] Сжатие фото...');
+    step('[1/4] Сжатие фото...');
     const compressedFile = await compressImage(file, 600, 0.80);
-    step(`[2/5] Фото сжато (${Math.round(compressedFile.size / 1024)} КБ). Загрузка на S3...`);
 
-    // Всегда используем base64 - это надежнее
-    step('[3/5] Кодирование в base64...');
-    const photoBase64 = await fileToBase64(compressedFile);
-    step(`[4/5] Base64 готов (${Math.round(photoBase64.length / 1024)} КБ). Загрузка на сервер...`);
+    step('[2/4] Загрузка фото на S3...');
+    const imageUrl = await uploadToS3(compressedFile);
 
     // Найти полный промпт стиля по ID
     const styleObj = STYLES.find(s => s.id === style);
     const stylePrompt = styleObj?.prompt || `${style} style portrait`;
 
+    step('[3/4] Фото загружено. Отправка на генерацию...');
     const requestData = {
       user_id: userId,
-      photo_base64: photoBase64,
-      mime_type: compressedFile.type || 'image/jpeg',
-      file_name: compressedFile.name || 'photo.jpg',
+      image_url: imageUrl,
       style: stylePrompt,
       init_data: initData,
-      creativity: creativity,
     };
 
-    step('[5/5] Ожидание генерации от AI...');
-    const result = await apiRequest('generate', requestData);
+    step('[4/4] Ожидание генерации от AI...');
+    const result = await apiRequest('generate', requestData, 180000);
 
     return result;
   } catch (error) {
@@ -297,8 +266,8 @@ export async function generateAvatar(userId, file, style, initData, creativity =
 }
 
 // Создать инвойс для оплаты звёздами
-export async function createInvoice(userId, starCount) {
-  return apiRequest('create-invoice', { user_id: userId, star_count: starCount });
+export async function createInvoice(userId, starCount, initData) {
+  return apiRequest('create-invoice', { user_id: userId, star_count: starCount, init_data: initData });
 }
 
 // Получить статус пользователя (лимиты, баланс)
@@ -336,7 +305,7 @@ export async function generateMultiPhoto(userId, files, prompt, initData, onStep
     };
 
     step('[4/4] Ожидание генерации от AI...');
-    return await apiRequest('generate-multi', requestData, 120000);
+    return await apiRequest('generate-multi', requestData, 180000);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -344,39 +313,32 @@ export async function generateMultiPhoto(userId, files, prompt, initData, onStep
   }
 }
 
-// Генерация по референсу (fal-ai/image-apps-v2/style-transfer)
-export async function generateStyleTransfer(userId, mainFile, refFile, prompt, initData, onStep) {
+// Генерация по референсу (Kie.ai Nano Banana Pro) — 2-4 фото + разрешение
+export async function generateStyleTransfer(userId, files, prompt, resolution, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step('[1/4] Сжатие фотографий...');
-    const [compressedMain, compressedRef] = await Promise.all([
-      compressImage(mainFile),
-      compressImage(refFile),
-    ]);
+    step(`[1/4] Сжатие ${files.length} фото...`);
+    const compressed = await Promise.all(files.map((f) => compressImage(f)));
 
-    step('[2/4] Загрузка фото на S3...');
-    const [mainUrl, refUrl] = await Promise.all([
-      uploadToFal(compressedMain),
-      uploadToFal(compressedRef),
-    ]);
+    step(`[2/4] Загрузка ${compressed.length} фото на S3...`);
+    const imageUrls = await uploadMultipleToFal(compressed);
 
-    step('[3/4] Фото загружены. Отправка на генерацию...');
+    step('[3/4] Фото загружены. Отправка на генерацию через Kie.ai...');
     const requestData = {
       user_id: userId,
       mode: 'style_transfer',
-      image_url: mainUrl,
-      style_reference_image_url: refUrl,
+      image_urls: imageUrls,
+      resolution: resolution || '2K',
       init_data: initData,
     };
 
-    // Добавляем промпт, если он указан
     if (prompt && prompt.trim().length > 0) {
       requestData.prompt = prompt.trim();
     }
 
-    step('[4/4] Ожидание генерации от AI...');
-    return await apiRequest('generate-style-transfer', requestData, 120000);
+    step('[4/4] Ожидание генерации (может занять несколько минут)...');
+    return await apiRequest('generate-style-transfer', requestData, 300000);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -424,16 +386,22 @@ export async function generateGeminiStyle(userId, mainFile, refFile, prompt, ini
   }
 }
 
-// Генерация видео из фото + промпт (fal-ai/minimax/hailuo-2.3)
-export async function generateVideo(userId, file, prompt, duration, initData, onStep) {
+// Генерация видео из фото (Kie.ai Kling 3.0)
+export async function generateVideo(userId, file, prompt, duration, options, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
+  const { quality = 'std', sound = false, aspect = '9:16', lastFrameFile = null } = options || {};
 
   try {
     step('[1/4] Сжатие фото...');
     const compressedFile = await compressImage(file);
 
     step('[2/4] Загрузка фото на S3...');
-    const imageUrl = await uploadToFal(compressedFile);
+    const uploads = [uploadToFal(compressedFile)];
+    if (lastFrameFile) {
+      const compressedLast = await compressImage(lastFrameFile);
+      uploads.push(uploadToFal(compressedLast));
+    }
+    const [imageUrl, lastFrameUrl] = await Promise.all(uploads);
 
     step('[3/4] Фото загружено. Отправка на генерацию видео...');
     const requestData = {
@@ -442,8 +410,12 @@ export async function generateVideo(userId, file, prompt, duration, initData, on
       image_url: imageUrl,
       prompt,
       duration: String(duration),
+      quality,
+      sound,
+      aspect_ratio: aspect,
       init_data: initData,
     };
+    if (lastFrameUrl) requestData.last_frame_url = lastFrameUrl;
 
     step('[4/4] Генерация видео (может занять 1–3 минуты)...');
     return await apiRequest('generate-video', requestData, 300000);
@@ -454,23 +426,58 @@ export async function generateVideo(userId, file, prompt, duration, initData, on
   }
 }
 
-// Face Swap (fal-ai/face-swap)
-export async function generateFaceSwap(userId, sourceFile, targetFile, initData, onStep) {
+// Lip Sync (Kie.ai Kling AI Avatar Pro)
+export async function generateLipSync(userId, photoFile, audioFile, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
-    step('[1/4] Сжатие фотографий...');
-    const [compSrc, compTgt] = await Promise.all([compressImage(sourceFile), compressImage(targetFile)]);
-    step('[2/4] Загрузка фото на S3...');
-    const [srcUrl, tgtUrl] = await Promise.all([uploadToFal(compSrc), uploadToFal(compTgt)]);
-    step('[3/4] Фото загружены. Замена лица...');
-    const requestData = { user_id: userId, mode: 'face_swap', source_url: srcUrl, target_url: tgtUrl, init_data: initData };
-    step('[4/4] Ожидание генерации...');
-    return await apiRequest('generate-face-swap', requestData, 120000);
+    step('[1/4] Сжатие фото...');
+    const compressed = await compressImage(photoFile);
+
+    step('[2/4] Загрузка фото и аудио на S3...');
+    const [imageUrl, audioUrl] = await Promise.all([
+      uploadToFal(compressed),
+      uploadAudioToS3(audioFile),
+    ]);
+
+    step('[3/4] Файлы загружены. Запуск Lip Sync...');
+    const requestData = {
+      user_id: userId,
+      mode: 'lip_sync',
+      image_url: imageUrl,
+      audio_url: audioUrl,
+      prompt: prompt || '',
+      init_data: initData,
+    };
+
+    step('[4/4] Генерация видео (может занять 1–3 минуты)...');
+    return await apiRequest('generate-lip-sync', requestData, 300000);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
-    throw new Error(`Stage: FACE_SWAP, Error: ${msg}`);
+    throw new Error(`Stage: LIP_SYNC, Error: ${msg}`);
   }
+}
+
+// Загрузка аудио на S3
+async function uploadAudioToS3(file) {
+  const base64 = await fileToBase64(file);
+  const response = await fetch('https://n8n.creativeanalytic.ru/s3-upload/upload-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      photo_base64: base64,
+      mime_type: file.type || 'audio/mpeg',
+      file_name: file.name || 'audio.mp3',
+    }),
+  });
+  if (!response.ok) throw new Error(`S3 audio upload failed: ${response.status}`);
+  const data = await response.json();
+  const result = Array.isArray(data) ? data[0] : data;
+  if (result?.file_url) {
+    console.log('Audio uploaded to S3:', result.file_url);
+    return result.file_url;
+  }
+  throw new Error('Stage: S3_AUDIO_UPLOAD, Error: no file_url in response');
 }
 
 // Remove Background (fal-ai/birefnet)
@@ -488,7 +495,7 @@ export async function generateRemoveBg(userId, file, initData, onStep) {
       image_url: imageUrl,
       init_data: initData
     };
-    return await apiRequest('generate-remove-bg', requestData, 60000);
+    return await apiRequest('generate-remove-bg', requestData, 120000);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -526,7 +533,7 @@ export async function generateTextToImage(userId, prompt, initData, onStep) {
     step('[1/2] Отправка промпта...');
     const requestData = { user_id: userId, mode: 'text_to_image', prompt, init_data: initData };
     step('[2/2] Генерация изображения...');
-    return await apiRequest('generate-text-to-image', requestData, 120000);
+    return await apiRequest('generate-text-to-image', requestData, 180000);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -535,18 +542,23 @@ export async function generateTextToImage(userId, prompt, initData, onStep) {
 }
 
 // История генераций пользователя
-export async function getUserGenerations(userId) {
-  return apiRequest('user-generations', { user_id: userId });
+export async function getUserGenerations(userId, initData) {
+  return apiRequest('user-generations', { user_id: userId, init_data: initData });
 }
 
 // Удалить генерацию из БД
-export async function deleteUserGeneration(userId, generationId) {
-  return apiRequest('delete-generation', { user_id: userId, generation_id: generationId });
+export async function deleteUserGeneration(userId, generationId, initData) {
+  return apiRequest('delete-generation', { user_id: userId, generation_id: generationId, init_data: initData });
 }
 
 // Реферальная статистика
-export async function getReferralStats(userId) {
-  return apiRequest('referral-stats', { user_id: userId });
+export async function getReferralStats(userId, initData) {
+  return apiRequest('referral-stats', { user_id: userId, init_data: initData });
+}
+
+// Validate admin password via server (returns admin stats on success, error on failure)
+export async function validateAdminPassword(password) {
+  return apiRequest('admin-stats', { password });
 }
 
 // Admin stats

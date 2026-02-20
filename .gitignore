@@ -4,3 +4,11 @@ dist
 .env.local
 *.log
 nul
+.vercel
+.env*.local
+
+# Non-project files (scripts with secrets, backups, dumps)
+_non_project_files/
+*.py
+s3-upload-service/
+.claude/
