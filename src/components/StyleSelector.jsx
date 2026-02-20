@@ -1,6 +1,6 @@
 import { STYLES } from '../utils/styles';
 
-export default function StyleSelector({ selectedStyle, onStyleSelect, userStatus }) {
+export default function StyleSelector({ selectedStyle, onStyleSelect }) {
   return (
     <div className="style-selector">
       <h2 className="section-title">Выбери стиль</h2>

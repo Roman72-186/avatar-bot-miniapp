@@ -7,6 +7,8 @@
   --accent: var(--tg-theme-button-color, #7C5CFC);
   --accent-text: var(--tg-theme-button-text-color, #ffffff);
   --link: var(--tg-theme-link-color, #7C5CFC);
+  --text-primary: var(--tg-theme-text-color, #f0f0f5);
+  --text-secondary: var(--tg-theme-hint-color, #a0a0b8);
 
   --card-bg: var(--tg-theme-secondary-bg-color, rgba(255, 255, 255, 0.05));
   --card-border: rgba(120, 120, 128, 0.2);
@@ -907,6 +909,7 @@ body {
 }
 
 .mode-tab {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -922,6 +925,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s ease;
+  overflow: hidden;
   white-space: nowrap;
 }
 
@@ -937,6 +941,21 @@ body {
 
 .mode-tab-emoji {
   font-size: 16px;
+}
+
+.mode-tab-free {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2px 5px;
+  border-radius: 0 var(--radius-sm) 0 8px;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 /* === Multi Photo Upload === */

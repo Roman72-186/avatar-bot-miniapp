@@ -67,9 +67,10 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetr
 
       const result = await response.json();
 
-      // Проверка на ошибки в ответе
+      // Проверка на ошибки в ответе (бизнес-логика — не ретраим)
       if (result?.error || result?.status === 'error') {
-        throw new Error(result.error || result.message || 'Generation failed');
+        const msg = result.error || result.message || 'Generation failed';
+        throw Object.assign(new Error(msg), { _noRetry: true });
       }
 
       return result;
@@ -78,10 +79,11 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetr
       clearTimeout(timeout);
       lastError = error;
 
-      // Если это последняя попытка - выбрасываем ошибку
-      if (attempt === maxRetries) {
+      // Бизнес-ошибки и HTTP 4xx — не ретраим
+      const isBusinessError = error._noRetry || /^HTTP 4\d\d/.test(error.message);
+      if (isBusinessError || attempt === maxRetries) {
         const friendlyMsg = getFriendlyErrorMessage(error, endpoint);
-        console.error(`API request failed after ${maxRetries + 1} attempts:`, error);
+        console.error(`API request failed:`, error);
         throw new Error(friendlyMsg);
       }
 
@@ -249,6 +251,7 @@ export async function generateAvatar(userId, file, style, initData, creativity =
       user_id: userId,
       image_url: imageUrl,
       style: stylePrompt,
+      creativity: creativity,
       init_data: initData,
     };
 
@@ -270,13 +273,15 @@ export async function createInvoice(userId, starCount, initData) {
   return apiRequest('create-invoice', { user_id: userId, star_count: starCount, init_data: initData });
 }
 
-// Получить статус пользователя (лимиты, баланс)
-export async function getUserStatus(userId, initData, username) {
-  return apiRequest('user-status', {
+// Получить статус пользователя (лимиты, баланс) — без retry для быстрой загрузки
+export async function getUserStatus(userId, initData, username, referredBy) {
+  const data = {
     user_id: userId,
     username: username || '',
     init_data: initData,
-  });
+  };
+  if (referredBy) data.referred_by = referredBy;
+  return apiRequest('user-status', data, 15000, 0);
 }
 
 // Загрузка нескольких файлов на fal.ai параллельно
@@ -566,19 +571,19 @@ export async function getAdminStats(password) {
   return apiRequest('admin-stats', { password });
 }
 
-// Add stars to user by username (admin only)
-export async function addStarsByUsername(password, username, amount) {
-  return apiRequest('add-stars', { password, username, amount });
+// Add stars to user by username or user_id (admin only)
+export async function addStarsByUsername(password, username, amount, userId) {
+  return apiRequest('add-stars', { password, username: username || undefined, user_id: userId, amount });
 }
 
 // Block/unblock user (admin only)
-export async function blockUser(password, username, blocked) {
-  return apiRequest('block-user', { password, username, blocked });
+export async function blockUser(password, username, blocked, userId) {
+  return apiRequest('block-user', { password, username: username || undefined, user_id: userId, blocked });
 }
 
 // Delete user (admin only)
-export async function deleteUser(password, username) {
-  return apiRequest('delete-user', { password, username });
+export async function deleteUser(password, username, userId) {
+  return apiRequest('delete-user', { password, username: username || undefined, user_id: userId });
 }
 
 // NanoBanana Pro AI Avatar Generation (2-8 photos)

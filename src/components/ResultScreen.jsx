@@ -4,7 +4,6 @@ import { useTelegram } from '../hooks/useTelegram';
 export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image', style, onNewGeneration, userId }) {
   const { hapticFeedback, tg, shareResult } = useTelegram();
   const [displayUrl, setDisplayUrl] = useState(null);
-  const [imgError, setImgError] = useState(null);
 
   const mediaUrl = resultType === 'video' ? videoUrl : imageUrl;
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateLipSync, generateRemoveBg, generateEnhance, generateTextToImage, generateGeminiStyle, generateNanoBanana, validateAdminPassword } from './utils/api';
-import { STYLES, STARS_PER_GENERATION } from './utils/styles';
+import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateLipSync, generateRemoveBg, generateEnhance, generateTextToImage, validateAdminPassword } from './utils/api';
 import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
 import PhotoUpload from './components/PhotoUpload';
 import StyleSelector from './components/StyleSelector';
@@ -11,7 +10,6 @@ import ResultScreen from './components/ResultScreen';
 import SentScreen from './components/SentScreen';
 import ModeSelector from './components/ModeSelector';
 import MultiPhotoUpload from './components/MultiPhotoUpload';
-import ReferencePhotoUpload from './components/ReferencePhotoUpload';
 import PromptInput from './components/PromptInput';
 import DurationSelector from './components/DurationSelector';
 import ResolutionSelector from './components/ResolutionSelector';
@@ -39,21 +37,28 @@ export default function App() {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [resultImage, setResultImage] = useState(null);
-  const [freeGens, setFreeGens] = useState(null);
-  const [starBalance, setStarBalance] = useState(0);
+  // Инициализация из кеша для мгновенного отображения
+  const [freeGens, setFreeGens] = useState(() => {
+    try {
+      const cached = localStorage.getItem('userStatus_freeGens');
+      return cached ? JSON.parse(cached) : null;
+    } catch { return null; }
+  });
+  const [starBalance, setStarBalance] = useState(() => {
+    try {
+      return Number(localStorage.getItem('userStatus_starBalance')) || 0;
+    } catch { return 0; }
+  });
   const [showTopUp, setShowTopUp] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(50);
   const [error, setError] = useState(null);
   const [errorDetails, setErrorDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [creativity, setCreativity] = useState(50);
-  const [debugStep, setDebugStep] = useState(null);
 
   // New mode state
   const [mode, setMode] = useState(DEFAULT_MODE);
   const [photos, setPhotos] = useState([null, null, null, null]);
-  const [referenceFile, setReferenceFile] = useState(null);
-  const [referencePreview, setReferencePreview] = useState(null);
   const [promptText, setPromptText] = useState('');
   const [videoDuration, setVideoDuration] = useState('5');
   const [videoQuality, setVideoQuality] = useState('std');
@@ -145,7 +150,10 @@ export default function App() {
 
   const loadUserStatus = async () => {
     try {
-      const result = await getUserStatus(userId, initData, username);
+      const referredBy = startParam?.startsWith('ref_')
+        ? startParam.replace('ref_', '')
+        : null;
+      const result = await getUserStatus(userId, initData, username, referredBy);
       const status = Array.isArray(result) ? result[0] : result;
 
       // Проверка блокировки пользователя
@@ -158,12 +166,19 @@ export default function App() {
       }
 
       setIsBlocked(false);
-      setFreeGens({
+      const newFreeGens = {
         free_stylize: status.free_stylize ?? 0,
         free_remove_bg: status.free_remove_bg ?? 0,
         free_enhance: status.free_enhance ?? 0,
-      });
-      setStarBalance(status.star_balance || 0);
+      };
+      const newBalance = status.star_balance || 0;
+      setFreeGens(newFreeGens);
+      setStarBalance(newBalance);
+      // Кешируем для мгновенной загрузки при следующем открытии
+      try {
+        localStorage.setItem('userStatus_freeGens', JSON.stringify(newFreeGens));
+        localStorage.setItem('userStatus_starBalance', String(newBalance));
+      } catch {}
     } catch (e) {
       console.error('Failed to load user status:', e);
       setFreeGens({ free_stylize: 1, free_remove_bg: 1, free_enhance: 1 });
@@ -173,12 +188,6 @@ export default function App() {
   const handlePhotoSelected = (file, preview) => {
     setPhotoFile(file);
     setPhotoPreview(preview);
-    hapticFeedback('light');
-  };
-
-  const handleReferenceSelected = (file, preview) => {
-    setReferenceFile(file);
-    setReferencePreview(preview);
     hapticFeedback('light');
   };
 
@@ -201,8 +210,6 @@ export default function App() {
     setPhotoPreview(null);
     setSelectedStyle(null);
     setPhotos([null, null, null, null]);
-    setReferenceFile(null);
-    setReferencePreview(null);
     setPromptText('');
     setVideoDuration('5');
     setVideoQuality('std');
@@ -247,14 +254,8 @@ export default function App() {
     case 'multi_photo':
       canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 2) && promptText.trim().length > 0;
       break;
-    case 'ai_magic':
-      canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 2);
-      break;
     case 'style_transfer':
       canGenerate = photos.filter(Boolean).length >= 2 && promptText.trim().length > 0;
-      break;
-    case 'gemini_style':
-      canGenerate = !!(photoFile && referenceFile);
       break;
     case 'photo_to_video':
       canGenerate = !!(photoFile && promptText.trim().length > 0);
@@ -291,24 +292,14 @@ export default function App() {
 
       switch (mode) {
         case 'stylize':
-          result = await generateAvatar(userId, photoFile, selectedStyle, initData, creativity, setDebugStep);
+          result = await generateAvatar(userId, photoFile, selectedStyle, initData, creativity);
           break;
         case 'multi_photo':
           result = await generateMultiPhoto(
             userId,
             photos.filter(Boolean).map((p) => p.file),
             promptText,
-            initData,
-            setDebugStep
-          );
-          break;
-        case 'ai_magic':
-          result = await generateNanoBanana(
-            userId,
-            photos.filter(Boolean).map((p) => p.file),
-            promptText,
-            initData,
-            setDebugStep
+            initData
           );
           break;
         case 'style_transfer':
@@ -317,29 +308,25 @@ export default function App() {
             photos.filter(Boolean).map((p) => p.file),
             promptText,
             styleResolution,
-            initData,
-            setDebugStep
+            initData
           );
-          break;
-        case 'gemini_style':
-          result = await generateGeminiStyle(userId, photoFile, referenceFile, promptText, initData, setDebugStep);
           break;
         case 'photo_to_video':
           result = await generateVideo(userId, photoFile, promptText, videoDuration, {
             quality: videoQuality, sound: videoSound, aspect: videoAspect, lastFrameFile,
-          }, initData, setDebugStep);
+          }, initData);
           break;
         case 'lip_sync':
-          result = await generateLipSync(userId, photoFile, audioFile, promptText, initData, setDebugStep);
+          result = await generateLipSync(userId, photoFile, audioFile, promptText, initData);
           break;
         case 'remove_bg':
-          result = await generateRemoveBg(userId, photoFile, initData, setDebugStep);
+          result = await generateRemoveBg(userId, photoFile, initData);
           break;
         case 'enhance':
-          result = await generateEnhance(userId, photoFile, initData, setDebugStep);
+          result = await generateEnhance(userId, photoFile, initData);
           break;
         case 'text_to_image':
-          result = await generateTextToImage(userId, promptText, initData, setDebugStep);
+          result = await generateTextToImage(userId, promptText, initData);
           break;
       }
 
@@ -424,8 +411,6 @@ export default function App() {
     setPhotoPreview(null);
     setSelectedStyle(null);
     setPhotos([null, null, null, null]);
-    setReferenceFile(null);
-    setReferencePreview(null);
     setPromptText('');
     setVideoDuration('5');
     setVideoQuality('std');
@@ -443,9 +428,7 @@ export default function App() {
   const buttonLabels = {
     stylize: '\u2728 Создать аватарку',
     multi_photo: '\u2728 Сгенерировать',
-    ai_magic: '\ud83c\udf1f Создать AI-аватар',
     style_transfer: '\u2728 Перенести стиль',
-    gemini_style: '\ud83c\udf1f Создать с Gemini',
     photo_to_video: '\ud83c\udfac Создать видео',
     lip_sync: '\ud83d\udde3\ufe0f Создать Lip Sync',
     remove_bg: '\u2702\ufe0f Убрать фон',
@@ -498,25 +481,19 @@ export default function App() {
               <span className="title-accent" onClick={handleAiClick}>AI</span> DEVELOPERS
             </h1>
             <p className="app-subtitle">{currentMode.description}</p>
-            {freeGens !== null && (
-              <div className="header-actions">
-                <button className="header-action-btn stars" onClick={() => setShowTopUp(true)}>
-                  <span className="header-action-icon">⭐</span>
-                  <span className="header-action-label">{starBalance || 0}</span>
-                </button>
-                <button className="header-action-btn" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.HISTORY); }}>
-                  <span className="header-action-icon">🕐</span>
-                  <span className="header-action-label">История</span>
-                </button>
-                <button className="header-action-btn referral" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.REFERRAL); }}>
-                  <span className="header-action-icon">🎁</span>
-                  <span className="header-action-label">Рефералы</span>
-                </button>
-              </div>
-            )}
+            <div className="header-actions">
+              <button className="header-action-btn stars" onClick={() => setShowTopUp(true)}>
+                <span className="header-action-icon">⭐</span>
+                <span className="header-action-label">{freeGens !== null ? (starBalance || 0) : '...'}</span>
+              </button>
+              <button className="header-action-btn referral" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.REFERRAL); }}>
+                <span className="header-action-icon">🎁</span>
+                <span className="header-action-label">Рефералы</span>
+              </button>
+            </div>
           </header>
 
-          <ModeSelector selectedMode={mode} onModeSelect={handleModeSelect} />
+          <ModeSelector selectedMode={mode} onModeSelect={handleModeSelect} freeGens={freeGens} />
 
           {/* Stylize mode */}
           {mode === 'stylize' && (
@@ -559,23 +536,6 @@ export default function App() {
                 value={promptText}
                 onChange={setPromptText}
                 placeholder="Опишите, как объединить фото... Например: объедини лица с фото 1 и 2 в стиле киберпанк"
-              />
-            </>
-          )}
-
-          {/* AI Magic mode (NanoBanana) */}
-          {mode === 'ai_magic' && (
-            <>
-              <MultiPhotoUpload
-                photos={photos}
-                onPhotosChanged={setPhotos}
-                minPhotos={currentMode.minPhotos || 2}
-                maxPhotos={currentMode.maxPhotos || 8}
-              />
-              <PromptInput
-                value={promptText}
-                onChange={setPromptText}
-                placeholder="Опишите желаемый стиль аватара (необязательно)... Например: professional portrait, business suit, studio lighting"
               />
             </>
           )}
@@ -647,19 +607,6 @@ export default function App() {
                 </>
               )}
             </>
-          )}
-
-          {/* Gemini style mode */}
-          {mode === 'gemini_style' && (
-            <ReferencePhotoUpload
-              mainPhoto={{ file: photoFile, preview: photoPreview }}
-              referencePhoto={{ file: referenceFile, preview: referencePreview }}
-              onMainPhotoSelected={handlePhotoSelected}
-              onReferencePhotoSelected={handleReferenceSelected}
-              promptText={promptText}
-              onPromptChange={setPromptText}
-              promptPlaceholder="Опишите желаемый стиль (необязательно)"
-            />
           )}
 
           {/* Lip Sync mode */}

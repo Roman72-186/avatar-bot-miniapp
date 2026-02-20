@@ -62,7 +62,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
     setActionMessage('');
     try {
       const finalAmount = actionType === 'deduct' ? -amount : amount;
-      const result = await addStarsByUsername(adminPassword, selectedUser.username, finalAmount);
+      const result = await addStarsByUsername(adminPassword, selectedUser.username, finalAmount, selectedUser.user_id);
       const data = Array.isArray(result) ? result[0] : result;
       if (data?.error) {
         setActionMessage(data.message);
@@ -90,7 +90,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
 
     setBlockLoading(true);
     try {
-      const result = await blockUser(adminPassword, selectedUser.username, shouldBlock);
+      const result = await blockUser(adminPassword, selectedUser.username, shouldBlock, selectedUser.user_id);
       const data = Array.isArray(result) ? result[0] : result;
       if (data?.username) {
         setSelectedUser(prev => ({ ...prev, blocked: shouldBlock }));
@@ -110,7 +110,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
     setActionLoading(true);
     setActionMessage('');
     try {
-      const result = await deleteUser(adminPassword, selectedUser.username);
+      const result = await deleteUser(adminPassword, selectedUser.username, selectedUser.user_id);
       const data = Array.isArray(result) ? result[0] : result;
       if (data?.deleted) {
         setSelectedUser(null);
