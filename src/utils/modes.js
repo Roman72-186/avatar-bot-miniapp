@@ -4,7 +4,7 @@ export const MODES = {
     name: 'Стилизация',
     emoji: '🎨',
     description: 'Преврати фото в арт',
-    starCost: 5,
+    starCost: 8,
     hasFree: true,
     freeKey: 'free_stylize',
     resultType: 'image',
@@ -27,7 +27,7 @@ export const MODES = {
     name: 'По референсу',
     emoji: '🪄',
     description: 'Перенеси стиль с референса',
-    starCost: { '2_2K': 8, '2_4K': 16, '3_2K': 12, '3_4K': 24 },
+    starCost: { '2_2K': 30, '2_4K': 40, '3_2K': 30, '3_4K': 40 },
     hasFree: false,
     resultType: 'image',
     endpoint: 'generate-style-transfer',
@@ -40,8 +40,8 @@ export const MODES = {
     emoji: '🎬',
     description: 'Оживи фото в видео',
     starCost: {
-      '5_std_off': 50, '5_std_on': 70, '5_pro_off': 65, '5_pro_on': 95,
-      '10_std_off': 100, '10_std_on': 140, '10_pro_off': 130, '10_pro_on': 190,
+      '5_std_off': 155, '5_std_on': 235, '5_pro_off': 210, '5_pro_on': 310,
+      '10_std_off': 310, '10_std_on': 465, '10_pro_off': 420, '10_pro_on': 620,
     },
     hasFree: false,
     resultType: 'video',
@@ -52,7 +52,7 @@ export const MODES = {
     name: 'Lip Sync',
     emoji: '🗣️',
     description: 'Фото говорит твоим голосом',
-    starCost: 50,
+    starCost: 250,
     hasFree: false,
     resultType: 'video',
     endpoint: 'generate-lip-sync',
@@ -84,7 +84,7 @@ export const MODES = {
     name: 'Текст в фото',
     emoji: '💬',
     description: 'Создай изображение по описанию',
-    starCost: 6,
+    starCost: 8,
     hasFree: false,
     resultType: 'image',
     endpoint: 'generate-text-to-image',
@@ -114,12 +114,12 @@ export function getStarCost(modeId, options = {}) {
     // Video pricing: duration + quality + sound
     if (options.duration && options.videoQuality !== undefined) {
       const key = `${options.duration}_${options.videoQuality}_${options.videoSound ? 'on' : 'off'}`;
-      return mode.starCost[key] || 50;
+      return mode.starCost[key] || 155;
     }
     // Style transfer: photoCount + resolution
     if (options.photoCount !== undefined && options.resolution) {
       const bucket = options.photoCount <= 2 ? '2' : '3';
-      return mode.starCost[`${bucket}_${options.resolution}`] || 8;
+      return mode.starCost[`${bucket}_${options.resolution}`] || 30;
     }
   }
   return 25;

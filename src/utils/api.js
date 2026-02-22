@@ -236,26 +236,27 @@ export async function generateAvatar(userId, file, style, initData, creativity =
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step('[1/4] Сжатие фото...');
+    step('[1/3] Сжатие фото...');
     const compressedFile = await compressImage(file, 600, 0.80);
 
-    step('[2/4] Загрузка фото на S3...');
-    const imageUrl = await uploadToS3(compressedFile);
+    step('[2/3] Подготовка фото...');
+    const base64 = await fileToBase64(compressedFile);
 
     // Найти полный промпт стиля по ID
     const styleObj = STYLES.find(s => s.id === style);
     const stylePrompt = styleObj?.prompt || `${style} style portrait`;
 
-    step('[3/4] Фото загружено. Отправка на генерацию...');
+    step('[3/3] Отправка на генерацию...');
     const requestData = {
       user_id: userId,
-      image_url: imageUrl,
+      photo_base64: base64,
+      mime_type: compressedFile.type || 'image/jpeg',
+      file_name: compressedFile.name || 'photo.jpg',
       style: stylePrompt,
       creativity: creativity,
       init_data: initData,
     };
 
-    step('[4/4] Ожидание генерации от AI...');
     const result = await apiRequest('generate', requestData, 180000);
 
     return result;
