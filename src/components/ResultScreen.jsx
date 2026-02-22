@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from '../hooks/useTelegram';
 
-export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image', style, onNewGeneration, userId }) {
+export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image', style, onNewGeneration, userId, starBalance = 0, onTopUp }) {
   const { hapticFeedback, tg, shareResult } = useTelegram();
   const [displayUrl, setDisplayUrl] = useState(null);
 
@@ -75,6 +75,11 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
           📤 Поделиться
         </button>
       </div>
+      {starBalance < 50 && onTopUp && (
+        <div className="result-upsell" onClick={onTopUp}>
+          <span>⭐ Пополни баланс — бонус до +50%!</span>
+        </div>
+      )}
       <button className="new-generation-btn" onClick={handleNewGeneration}>
         🔄 Создать ещё
       </button>

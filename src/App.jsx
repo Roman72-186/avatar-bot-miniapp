@@ -19,6 +19,13 @@ import HistoryScreen from './components/HistoryScreen';
 import ReferralScreen from './components/ReferralScreen';
 import { saveGeneration } from './utils/generationCache';
 
+const STAR_PACKAGES = [
+  { amount: 10, bonus: 0, total: 10, badge: null },
+  { amount: 25, bonus: 5, total: 30, badge: null },
+  { amount: 50, bonus: 15, total: 65, badge: 'Популярный' },
+  { amount: 100, bonus: 50, total: 150, badge: 'Лучшая цена' },
+];
+
 const SCREENS = {
   MAIN: 'main',
   LOADING: 'loading',
@@ -127,12 +134,12 @@ export default function App() {
   const handleShareInvite = () => {
     hapticFeedback('light');
     const link = `https://t.me/those_are_the_gifts_bot?start=ref_${userId}`;
-    const text = '\ud83c\udfa8 \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 AI Avatar Studio \u2014 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f \u0430\u0432\u0430\u0442\u0430\u0440\u043e\u043a, \u0432\u0438\u0434\u0435\u043e \u0438 \u0430\u0440\u0442\u0430 \u043f\u0440\u044f\u043c\u043e \u0432 Telegram! \u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0435 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043a\u0430\u0436\u0434\u044b\u0439 \u0434\u0435\u043d\u044c.';
+    const text = '\ud83c\udfa8 \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 AI DEVELOPERS \u2014 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f \u0430\u0432\u0430\u0442\u0430\u0440\u043e\u043a, \u0432\u0438\u0434\u0435\u043e \u0438 \u0430\u0440\u0442\u0430 \u043f\u0440\u044f\u043c\u043e \u0432 Telegram! \u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0435 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043a\u0430\u0436\u0434\u044b\u0439 \u0434\u0435\u043d\u044c.';
     try {
       if (tg) {
         tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
       } else if (navigator.share) {
-        navigator.share({ title: 'Avatar Studio AI', text, url: link });
+        navigator.share({ title: 'AI DEVELOPERS', text, url: link });
       } else {
         navigator.clipboard?.writeText(`${text}\n${link}`);
       }
@@ -455,6 +462,8 @@ export default function App() {
           style={selectedStyle}
           onNewGeneration={handleNewGeneration}
           userId={userId}
+          starBalance={starBalance}
+          onTopUp={() => setShowTopUp(true)}
         />
       )}
 
@@ -704,25 +713,20 @@ export default function App() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>Пополнить баланс</h3>
             <p className="modal-balance">Текущий баланс: <strong>{starBalance} ⭐</strong></p>
-            <div className="topup-options">
-              {[10, 25, 50, 100].map((amount) => (
+            <div className="topup-packages">
+              {STAR_PACKAGES.map((pkg) => (
                 <button
-                  key={amount}
-                  className={`topup-option ${topUpAmount === amount ? 'selected' : ''}`}
-                  onClick={() => setTopUpAmount(amount)}
+                  key={pkg.amount}
+                  className={`topup-package ${topUpAmount === pkg.amount ? 'selected' : ''} ${pkg.badge ? 'has-badge' : ''}`}
+                  onClick={() => setTopUpAmount(pkg.amount)}
                 >
-                  {amount} ⭐
+                  {pkg.badge && <span className="package-badge">{pkg.badge}</span>}
+                  <span className="package-amount">{pkg.amount} ⭐</span>
+                  <span className="package-total">= {pkg.total} на баланс</span>
+                  {pkg.bonus > 0 && <span className="package-bonus">+{pkg.bonus} бонус</span>}
                 </button>
               ))}
             </div>
-            <input
-              type="number"
-              className="topup-input"
-              min="1"
-              value={topUpAmount}
-              onChange={(e) => setTopUpAmount(Math.max(1, Number(e.target.value)))}
-              placeholder="Своё количество"
-            />
             <button className="topup-confirm-btn" onClick={() => handleTopUp()}>
               Оплатить {topUpAmount} ⭐
             </button>
