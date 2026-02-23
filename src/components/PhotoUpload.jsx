@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 
-export default function PhotoUpload({ onPhotoSelected }) {
+export default function PhotoUpload({ onPhotoSelected, uploadTitle, uploadHint }) {
   const [preview, setPreview] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const galleryRef = useRef(null);
@@ -55,8 +55,8 @@ export default function PhotoUpload({ onPhotoSelected }) {
           onDrop={handleDrop}
         >
           <div className="upload-icon">📸</div>
-          <div className="upload-title">Загрузи своё фото</div>
-          <div className="upload-hint">Лучше всего работает с портретным фото лица крупным планом</div>
+          <div className="upload-title">{uploadTitle || 'Загрузи своё фото'}</div>
+          <div className="upload-hint">{uploadHint || 'Лучше всего работает с портретным фото лица крупным планом'}</div>
 
           <div className="upload-buttons">
             <button

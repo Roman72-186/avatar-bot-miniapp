@@ -149,9 +149,12 @@ export default function App() {
   };
 
   useEffect(() => {
+    console.log('[App] init', { userId, username, hasInitData: !!initData, startParam });
     initTelegram();
     if (userId) {
       loadUserStatus();
+    } else {
+      console.warn('[App] No userId — Telegram WebApp context missing?');
     }
   }, [userId]);
 
@@ -280,14 +283,24 @@ export default function App() {
   }
 
   const handleGenerate = async () => {
-    if (!canGenerate) return;
+    console.log('[handleGenerate] clicked!', {
+      mode, canGenerate, userId, hasInitData: !!initData,
+      freeLeft, starBalance, starCost,
+    });
+
+    if (!canGenerate) {
+      console.warn('[handleGenerate] canGenerate=false, aborting');
+      return;
+    }
 
     const hasFree = currentMode.hasFree && freeLeft > 0;
     if (!hasFree && starBalance < starCost) {
+      console.warn('[handleGenerate] insufficient balance, showing top-up');
       setShowTopUp(true);
       return;
     }
 
+    console.log('[handleGenerate] starting generation...', { hasFree, mode });
     setIsLoading(true);
     setScreen(SCREENS.LOADING);
     setResultType(currentMode.resultType);
@@ -382,7 +395,7 @@ export default function App() {
         }
       }
     } catch (e) {
-      console.error('Generation failed:', e);
+      console.error('[handleGenerate] FAILED:', e.message, e);
       const msg = e.message || '';
       let userMsg;
       if (msg.includes('TIMEOUT') || msg.includes('AbortError') || msg.includes('60 секунд')) {
@@ -477,8 +490,11 @@ export default function App() {
               {errorDetails}
             </div>
           )}
-          <button className="action-btn primary" onClick={handleNewGeneration}>
+          <button className="action-btn primary" onClick={() => { setScreen(SCREENS.MAIN); setError(null); setErrorDetails(null); }}>
             Попробовать снова
+          </button>
+          <button className="new-generation-btn" style={{ marginTop: 10, maxWidth: 280 }} onClick={handleNewGeneration}>
+            Начать заново
           </button>
         </div>
       )}
@@ -495,7 +511,7 @@ export default function App() {
                 <span className="header-action-icon">⭐</span>
                 <span className="header-action-label">{freeGens !== null ? (starBalance || 0) : '...'}</span>
               </button>
-              <button className="header-action-btn referral" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.REFERRAL); }}>
+<button className="header-action-btn referral" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.REFERRAL); }}>
                 <span className="header-action-icon">🎁</span>
                 <span className="header-action-label">Рефералы</span>
               </button>
@@ -572,7 +588,10 @@ export default function App() {
           {/* Photo to video mode */}
           {mode === 'photo_to_video' && (
             <>
-              <PhotoUpload onPhotoSelected={handlePhotoSelected} />
+              <PhotoUpload
+                onPhotoSelected={handlePhotoSelected}
+                uploadHint="Загрузите фото — AI оживит его в видео с движением"
+              />
               {photoFile && (
                 <>
                   <PromptInput
@@ -621,7 +640,10 @@ export default function App() {
           {/* Lip Sync mode */}
           {mode === 'lip_sync' && (
             <>
-              <PhotoUpload onPhotoSelected={handlePhotoSelected} />
+              <PhotoUpload
+                onPhotoSelected={handlePhotoSelected}
+                uploadHint="Загрузите портретное фото — AI заставит его говорить вашим голосом"
+              />
               {photoFile && (
                 <>
                   <div className="audio-upload-section">
@@ -678,9 +700,22 @@ export default function App() {
             </>
           )}
 
-          {/* Remove BG / Enhance modes */}
-          {(mode === 'remove_bg' || mode === 'enhance') && (
-            <PhotoUpload onPhotoSelected={handlePhotoSelected} />
+          {/* Remove BG mode */}
+          {mode === 'remove_bg' && (
+            <PhotoUpload
+              onPhotoSelected={handlePhotoSelected}
+              uploadTitle="Загрузи фото"
+              uploadHint="Загрузите любое фото — AI удалит фон и оставит только объект"
+            />
+          )}
+
+          {/* Enhance mode */}
+          {mode === 'enhance' && (
+            <PhotoUpload
+              onPhotoSelected={handlePhotoSelected}
+              uploadTitle="Загрузи фото для улучшения"
+              uploadHint="AI увеличит разрешение и улучшит качество любого фото"
+            />
           )}
 
           {/* Text to image mode */}
