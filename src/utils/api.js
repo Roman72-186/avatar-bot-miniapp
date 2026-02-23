@@ -21,9 +21,19 @@ function getFriendlyErrorMessage(error, endpoint) {
     return 'Проблема с подключением. Проверьте интернет и попробуйте снова.';
   }
 
+  // Ошибки авторизации (initData)
+  if (msg.includes('403') || msg.includes('unauthorized') || msg.includes('initData')) {
+    return 'Ошибка авторизации Telegram. Закройте и откройте мини-приложение заново.';
+  }
+
   // Ошибки сервера
   if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('504')) {
     return 'Сервер временно недоступен. Попробуйте через несколько секунд.';
+  }
+
+  // Ошибки S3 загрузки
+  if (msg.includes('S3') || msg.includes('s3-upload')) {
+    return 'Ошибка загрузки файла. Попробуйте ещё раз.';
   }
 
   // Ошибки AI генерации
@@ -43,6 +53,7 @@ function getFriendlyErrorMessage(error, endpoint) {
 // API запрос с автоматическими повторными попытками
 export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetries = 2) {
   let lastError = null;
+  console.log(`[API] ${endpoint} → sending request...`, { user_id: data.user_id, mode: data.mode, has_init_data: !!data.init_data });
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
@@ -59,6 +70,7 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetr
       });
 
       clearTimeout(timeout);
+      console.log(`[API] ${endpoint} → HTTP ${response.status}`);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
@@ -70,9 +82,11 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetr
       // Проверка на ошибки в ответе (бизнес-логика — не ретраим)
       if (result?.error || result?.status === 'error') {
         const msg = result.error || result.message || 'Generation failed';
+        console.error(`[API] ${endpoint} → business error:`, msg);
         throw Object.assign(new Error(msg), { _noRetry: true });
       }
 
+      console.log(`[API] ${endpoint} → success`, { sent: result?.sent, has_image: !!result?.image_url, has_video: !!result?.video_url });
       return result;
 
     } catch (error) {
@@ -83,12 +97,12 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetr
       const isBusinessError = error._noRetry || /^HTTP 4\d\d/.test(error.message);
       if (isBusinessError || attempt === maxRetries) {
         const friendlyMsg = getFriendlyErrorMessage(error, endpoint);
-        console.error(`API request failed:`, error);
+        console.error(`[API] ${endpoint} → FAILED (attempt ${attempt + 1}):`, error.message);
         throw new Error(friendlyMsg);
       }
 
       // Логируем попытку
-      console.warn(`API request attempt ${attempt + 1} failed, retrying...`, error);
+      console.warn(`[API] ${endpoint} → attempt ${attempt + 1} failed, retrying...`, error.message);
 
       // Экспоненциальная задержка: 2s, 4s
       const delay = Math.min(2000 * Math.pow(2, attempt), 5000);
@@ -100,41 +114,62 @@ export async function apiRequest(endpoint, data = {}, timeoutMs = 60000, maxRetr
   throw lastError || new Error('Unknown error');
 }
 
-// Загрузка фото на S3 через микросервис
+// Конвертация файла в base64
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(',')[1]); // Extract base64 part
+    reader.onerror = error => reject(error);
+  });
+}
+
+// Загрузка фото на S3 через микросервис (с таймаутом)
 async function uploadToS3(file) {
   const base64 = await fileToBase64(file);
 
-  // Используем прямой fetch к S3 микросервису (не через apiRequest)
-  const response = await fetch('https://n8n.creativeanalytic.ru/s3-upload/upload-photo', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      photo_base64: base64,
-      mime_type: file.type || 'image/jpeg',
-      file_name: file.name || 'photo.jpg',
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000); // 15 сек таймаут
 
-  if (!response.ok) {
-    throw new Error(`S3 upload failed: ${response.status}`);
+  try {
+    const response = await fetch('https://n8n.creativeanalytic.ru/s3-upload/upload-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        photo_base64: base64,
+        mime_type: file.type || 'image/jpeg',
+        file_name: file.name || 'photo.jpg',
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    if (!response.ok) {
+      throw new Error(`S3 upload failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const result = Array.isArray(data) ? data[0] : data;
+
+    if (result?.file_url) {
+      console.log('[S3] Фото загружено:', result.file_url);
+      return result.file_url;
+    }
+
+    throw new Error('Stage: S3_UPLOAD, Error: no file_url in response');
+  } catch (error) {
+    clearTimeout(timer);
+    if (error.name === 'AbortError') {
+      throw new Error('Stage: S3_UPLOAD, Error: timeout (S3 микросервис не отвечает)');
+    }
+    throw error;
   }
-
-  const data = await response.json();
-  const result = Array.isArray(data) ? data[0] : data;
-
-  if (result?.file_url) {
-    console.log('✅ Фото загружено на S3:', result.file_url);
-    return result.file_url;
-  }
-
-  throw new Error('Stage: S3_UPLOAD, Error: no file_url in response');
 }
 
-// Загрузка фото (теперь на S3 вместо fal.ai)
+// Загрузка фото (с fallback)
 export async function uploadToFal(file) {
-  // Загружаем на S3 через микросервис
-  // Результат доступен без VPN и блокировок
-  console.log('Загрузка фото на S3...');
+  console.log('[Upload] Загрузка фото на S3...');
   return await uploadToS3(file);
 }
 
@@ -221,15 +256,15 @@ export function compressImage(file, maxWidth = 1024, quality = 0.85) {
   });
 }
 
-// Конвертация файла в base64
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result.split(',')[1]); // Extract base64 part
-    reader.onerror = error => reject(error);
-  });
+// Загрузка нескольких файлов на S3 параллельно
+export async function uploadMultipleToFal(files) {
+  return Promise.all(files.map((f) => uploadToFal(f)));
 }
+
+// =====================================================================
+// ГЕНЕРАЦИЯ: ВСЕ РЕЖИМЫ ОТПРАВЛЯЮТ BASE64 НАПРЯМУЮ В WEBHOOK
+// (S3 микросервис не работает — загрузку на S3 делает n8n backend)
+// =====================================================================
 
 // Запрос генерации аватарки (Kie.ai flux-2/pro-image-to-image)
 export async function generateAvatar(userId, file, style, initData, creativity = 50, onStep) {
@@ -247,6 +282,7 @@ export async function generateAvatar(userId, file, style, initData, creativity =
     const stylePrompt = styleObj?.prompt || `${style} style portrait`;
 
     step('[3/3] Отправка на генерацию...');
+    console.log('[Generate] stylize → sending base64 to /generate');
     const requestData = {
       user_id: userId,
       photo_base64: base64,
@@ -257,7 +293,7 @@ export async function generateAvatar(userId, file, style, initData, creativity =
       init_data: initData,
     };
 
-    const result = await apiRequest('generate', requestData, 180000);
+    const result = await apiRequest('generate', requestData, 180000, 0);
 
     return result;
   } catch (error) {
@@ -285,33 +321,31 @@ export async function getUserStatus(userId, initData, username, referredBy) {
   return apiRequest('user-status', data, 15000, 0);
 }
 
-// Загрузка нескольких файлов на fal.ai параллельно
-export async function uploadMultipleToFal(files) {
-  return Promise.all(files.map((f) => uploadToFal(f)));
-}
-
-// Генерация из нескольких фото + промпт (fal-ai/flux-2-pro/edit)
+// Генерация из нескольких фото + промпт (base64 напрямую)
 export async function generateMultiPhoto(userId, files, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step(`[1/4] Сжатие ${files.length} фото...`);
-    const compressed = await Promise.all(files.map((f) => compressImage(f)));
+    step(`[1/3] Сжатие ${files.length} фото...`);
+    const compressed = await Promise.all(files.map((f) => compressImage(f, 600, 0.80)));
 
-    step(`[2/4] Загрузка ${compressed.length} фото на fal.ai...`);
-    const imageUrls = await uploadMultipleToFal(compressed);
+    step(`[2/3] Подготовка ${compressed.length} фото...`);
+    const photosBase64 = await Promise.all(compressed.map(async (f) => ({
+      base64: await fileToBase64(f),
+      mime_type: f.type || 'image/jpeg',
+    })));
 
-    step('[3/4] Все фото загружены. Отправка на генерацию...');
+    step('[3/3] Отправка на генерацию...');
+    console.log('[Generate] multi_photo → sending base64 to /generate-multi');
     const requestData = {
       user_id: userId,
       mode: 'multi_photo',
-      image_urls: imageUrls,
+      photos_base64: photosBase64,
       prompt,
       init_data: initData,
     };
 
-    step('[4/4] Ожидание генерации от AI...');
-    return await apiRequest('generate-multi', requestData, 180000);
+    return await apiRequest('generate-multi', requestData, 180000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -319,22 +353,26 @@ export async function generateMultiPhoto(userId, files, prompt, initData, onStep
   }
 }
 
-// Генерация по референсу (Kie.ai Nano Banana Pro) — 2-4 фото + разрешение
+// Генерация по референсу (base64 напрямую — n8n загружает на S3)
 export async function generateStyleTransfer(userId, files, prompt, resolution, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step(`[1/4] Сжатие ${files.length} фото...`);
+    step(`[1/3] Сжатие ${files.length} фото...`);
     const compressed = await Promise.all(files.map((f) => compressImage(f)));
 
-    step(`[2/4] Загрузка ${compressed.length} фото на S3...`);
-    const imageUrls = await uploadMultipleToFal(compressed);
+    step(`[2/3] Подготовка ${compressed.length} фото...`);
+    const photosBase64 = await Promise.all(compressed.map(async (f) => ({
+      base64: await fileToBase64(f),
+      mime_type: f.type || 'image/jpeg',
+    })));
 
-    step('[3/4] Фото загружены. Отправка на генерацию через Kie.ai...');
+    step('[3/3] Отправка на генерацию...');
+    console.log('[Generate] style_transfer → sending base64 to /generate-style-transfer');
     const requestData = {
       user_id: userId,
       mode: 'style_transfer',
-      image_urls: imageUrls,
+      photos_base64: photosBase64,
       resolution: resolution || '2K',
       init_data: initData,
     };
@@ -343,8 +381,7 @@ export async function generateStyleTransfer(userId, files, prompt, resolution, i
       requestData.prompt = prompt.trim();
     }
 
-    step('[4/4] Ожидание генерации (может занять несколько минут)...');
-    return await apiRequest('generate-style-transfer', requestData, 300000);
+    return await apiRequest('generate-style-transfer', requestData, 300000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -357,34 +394,34 @@ export async function generateGeminiStyle(userId, mainFile, refFile, prompt, ini
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step('[1/4] Сжатие фотографий...');
+    step('[1/3] Сжатие фотографий...');
     const [compressedMain, compressedRef] = await Promise.all([
       compressImage(mainFile),
       compressImage(refFile),
     ]);
 
-    step('[2/4] Загрузка фото на S3...');
-    const [mainUrl, refUrl] = await Promise.all([
-      uploadToFal(compressedMain),
-      uploadToFal(compressedRef),
+    step('[2/3] Подготовка фото...');
+    const [mainBase64, refBase64] = await Promise.all([
+      fileToBase64(compressedMain),
+      fileToBase64(compressedRef),
     ]);
 
-    step('[3/4] Фото загружены. Отправка на генерацию через Gemini...');
+    step('[3/3] Отправка на генерацию через Gemini...');
+    console.log('[Generate] gemini_style → sending base64 to /generate-gemini-style');
     const requestData = {
       user_id: userId,
       mode: 'gemini_style',
-      image_url: mainUrl,
-      style_reference_image_url: refUrl,
+      photo_base64: mainBase64,
+      style_ref_base64: refBase64,
+      mime_type: 'image/jpeg',
       init_data: initData,
     };
 
-    // Добавляем промпт, если он указан
     if (prompt && prompt.trim().length > 0) {
       requestData.prompt = prompt.trim();
     }
 
-    step('[4/4] Ожидание генерации от Gemini AI...');
-    return await apiRequest('generate-gemini-style', requestData, 120000);
+    return await apiRequest('generate-gemini-style', requestData, 120000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -392,28 +429,30 @@ export async function generateGeminiStyle(userId, mainFile, refFile, prompt, ini
   }
 }
 
-// Генерация видео из фото (Kie.ai Kling 3.0)
+// Генерация видео из фото (base64 напрямую — n8n загружает на S3)
 export async function generateVideo(userId, file, prompt, duration, options, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   const { quality = 'std', sound = false, aspect = '9:16', lastFrameFile = null } = options || {};
 
   try {
-    step('[1/4] Сжатие фото...');
+    step('[1/3] Сжатие фото...');
     const compressedFile = await compressImage(file);
 
-    step('[2/4] Загрузка фото на S3...');
-    const uploads = [uploadToFal(compressedFile)];
+    step('[2/3] Подготовка фото...');
+    const base64 = await fileToBase64(compressedFile);
+    let lastFrameBase64 = null;
     if (lastFrameFile) {
       const compressedLast = await compressImage(lastFrameFile);
-      uploads.push(uploadToFal(compressedLast));
+      lastFrameBase64 = await fileToBase64(compressedLast);
     }
-    const [imageUrl, lastFrameUrl] = await Promise.all(uploads);
 
-    step('[3/4] Фото загружено. Отправка на генерацию видео...');
+    step('[3/3] Отправка на генерацию видео...');
+    console.log('[Generate] photo_to_video → sending base64 to /generate-video');
     const requestData = {
       user_id: userId,
       mode: 'photo_to_video',
-      image_url: imageUrl,
+      photo_base64: base64,
+      mime_type: compressedFile.type || 'image/jpeg',
       prompt,
       duration: String(duration),
       quality,
@@ -421,10 +460,9 @@ export async function generateVideo(userId, file, prompt, duration, options, ini
       aspect_ratio: aspect,
       init_data: initData,
     };
-    if (lastFrameUrl) requestData.last_frame_url = lastFrameUrl;
+    if (lastFrameBase64) requestData.last_frame_base64 = lastFrameBase64;
 
-    step('[4/4] Генерация видео (может занять 1–3 минуты)...');
-    return await apiRequest('generate-video', requestData, 300000);
+    return await apiRequest('generate-video', requestData, 300000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -432,31 +470,34 @@ export async function generateVideo(userId, file, prompt, duration, options, ini
   }
 }
 
-// Lip Sync (Kie.ai Kling AI Avatar Pro)
+// Lip Sync (base64 напрямую — n8n загружает на S3)
 export async function generateLipSync(userId, photoFile, audioFile, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
-    step('[1/4] Сжатие фото...');
+    step('[1/3] Сжатие фото...');
     const compressed = await compressImage(photoFile);
 
-    step('[2/4] Загрузка фото и аудио на S3...');
-    const [imageUrl, audioUrl] = await Promise.all([
-      uploadToFal(compressed),
-      uploadAudioToS3(audioFile),
+    step('[2/3] Подготовка фото и аудио...');
+    const [photoBase64, audioBase64] = await Promise.all([
+      fileToBase64(compressed),
+      fileToBase64(audioFile),
     ]);
 
-    step('[3/4] Файлы загружены. Запуск Lip Sync...');
+    step('[3/3] Запуск Lip Sync...');
+    console.log('[Generate] lip_sync → sending base64 to /generate-lip-sync');
     const requestData = {
       user_id: userId,
       mode: 'lip_sync',
-      image_url: imageUrl,
-      audio_url: audioUrl,
+      photo_base64: photoBase64,
+      photo_mime_type: compressed.type || 'image/jpeg',
+      audio_base64: audioBase64,
+      audio_mime_type: audioFile.type || 'audio/mpeg',
+      audio_file_name: audioFile.name || 'audio.mp3',
       prompt: prompt || '',
       init_data: initData,
     };
 
-    step('[4/4] Генерация видео (может занять 1–3 минуты)...');
-    return await apiRequest('generate-lip-sync', requestData, 300000);
+    return await apiRequest('generate-lip-sync', requestData, 300000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -464,44 +505,59 @@ export async function generateLipSync(userId, photoFile, audioFile, prompt, init
   }
 }
 
-// Загрузка аудио на S3
+// Загрузка аудио на S3 (с таймаутом, используется как fallback)
 async function uploadAudioToS3(file) {
   const base64 = await fileToBase64(file);
-  const response = await fetch('https://n8n.creativeanalytic.ru/s3-upload/upload-photo', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      photo_base64: base64,
-      mime_type: file.type || 'audio/mpeg',
-      file_name: file.name || 'audio.mp3',
-    }),
-  });
-  if (!response.ok) throw new Error(`S3 audio upload failed: ${response.status}`);
-  const data = await response.json();
-  const result = Array.isArray(data) ? data[0] : data;
-  if (result?.file_url) {
-    console.log('Audio uploaded to S3:', result.file_url);
-    return result.file_url;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch('https://n8n.creativeanalytic.ru/s3-upload/upload-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        photo_base64: base64,
+        mime_type: file.type || 'audio/mpeg',
+        file_name: file.name || 'audio.mp3',
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!response.ok) throw new Error(`S3 audio upload failed: ${response.status}`);
+    const data = await response.json();
+    const result = Array.isArray(data) ? data[0] : data;
+    if (result?.file_url) {
+      console.log('[S3] Audio uploaded:', result.file_url);
+      return result.file_url;
+    }
+    throw new Error('Stage: S3_AUDIO_UPLOAD, Error: no file_url in response');
+  } catch (error) {
+    clearTimeout(timer);
+    if (error.name === 'AbortError') {
+      throw new Error('Stage: S3_AUDIO_UPLOAD, Error: timeout');
+    }
+    throw error;
   }
-  throw new Error('Stage: S3_AUDIO_UPLOAD, Error: no file_url in response');
 }
 
-// Remove Background (fal-ai/birefnet)
+// Remove Background (base64 напрямую — n8n загружает на S3)
 export async function generateRemoveBg(userId, file, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
-    step('[1/3] Сжатие фото...');
+    step('[1/2] Сжатие фото...');
     const compressed = await compressImage(file, 600, 0.80);
-    step('[2/3] Загрузка фото...');
-    const imageUrl = await uploadToFal(compressed);
-    step('[3/3] Удаление фона...');
+
+    step('[2/2] Удаление фона...');
+    const base64 = await fileToBase64(compressed);
+    console.log('[Generate] remove_bg → sending base64 to /generate-remove-bg');
     const requestData = {
       user_id: userId,
       mode: 'remove_bg',
-      image_url: imageUrl,
-      init_data: initData
+      photo_base64: base64,
+      mime_type: compressed.type || 'image/jpeg',
+      init_data: initData,
     };
-    return await apiRequest('generate-remove-bg', requestData, 120000);
+    return await apiRequest('generate-remove-bg', requestData, 120000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -509,22 +565,24 @@ export async function generateRemoveBg(userId, file, initData, onStep) {
   }
 }
 
-// Enhance / Upscale (fal-ai/clarity-upscaler)
+// Enhance / Upscale (base64 напрямую — n8n загружает на S3)
 export async function generateEnhance(userId, file, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
-    step('[1/3] Подготовка фото...');
+    step('[1/2] Подготовка фото...');
     const compressed = await compressImage(file, 1024, 0.85);
-    step('[2/3] Загрузка фото...');
-    const imageUrl = await uploadToFal(compressed);
-    step('[3/3] Улучшение качества...');
+
+    step('[2/2] Улучшение качества...');
+    const base64 = await fileToBase64(compressed);
+    console.log('[Generate] enhance → sending base64 to /generate-enhance');
     const requestData = {
       user_id: userId,
       mode: 'enhance',
-      image_url: imageUrl,
-      init_data: initData
+      photo_base64: base64,
+      mime_type: compressed.type || 'image/jpeg',
+      init_data: initData,
     };
-    return await apiRequest('generate-enhance', requestData, 120000);
+    return await apiRequest('generate-enhance', requestData, 120000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -532,14 +590,15 @@ export async function generateEnhance(userId, file, initData, onStep) {
   }
 }
 
-// Text to Image (fal-ai/flux/dev/text-to-image)
+// Text to Image (без загрузки файлов)
 export async function generateTextToImage(userId, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
     step('[1/2] Отправка промпта...');
+    console.log('[Generate] text_to_image → sending to /generate-text-to-image');
     const requestData = { user_id: userId, mode: 'text_to_image', prompt, init_data: initData };
     step('[2/2] Генерация изображения...');
-    return await apiRequest('generate-text-to-image', requestData, 180000);
+    return await apiRequest('generate-text-to-image', requestData, 180000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
@@ -605,28 +664,31 @@ export async function broadcastSend(password, { messageText, photoUrl, buttons, 
   }, 300000, 0);
 }
 
-// NanoBanana Pro AI Avatar Generation (2-8 photos)
+// NanoBanana Pro AI Avatar Generation (base64 напрямую)
 export async function generateNanoBanana(userId, files, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step(`[1/4] Сжатие ${files.length} фото...`);
+    step(`[1/3] Сжатие ${files.length} фото...`);
     const compressed = await Promise.all(files.map((f) => compressImage(f)));
 
-    step(`[2/4] Загрузка ${compressed.length} фото на S3...`);
-    const photoUrls = await uploadMultipleToFal(compressed);
+    step(`[2/3] Подготовка ${compressed.length} фото...`);
+    const photosBase64 = await Promise.all(compressed.map(async (f) => ({
+      base64: await fileToBase64(f),
+      mime_type: f.type || 'image/jpeg',
+    })));
 
-    step('[3/4] Все фото загружены. Отправка на генерацию AI-аватара...');
+    step('[3/3] Отправка на генерацию AI-аватара...');
+    console.log('[Generate] ai_magic → sending base64 to /generate-nanobanana');
     const requestData = {
       user_id: userId,
       mode: 'ai_magic',
-      photos: photoUrls,
+      photos_base64: photosBase64,
       prompt: prompt || 'Professional high-quality portrait photo of this person, studio lighting, sharp focus',
       init_data: initData,
     };
 
-    step('[4/4] Генерация AI-аватара запущена. Ожидайте результат через 30-60 секунд...');
-    return await apiRequest('generate-nanobanana', requestData, 120000);
+    return await apiRequest('generate-nanobanana', requestData, 120000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
     if (msg.includes('Stage:')) throw error;
