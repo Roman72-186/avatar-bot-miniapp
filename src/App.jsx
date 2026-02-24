@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateLipSync, generateRemoveBg, generateEnhance, generateTextToImage, validateAdminPassword } from './utils/api';
+import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateLipSync, generateRemoveBg, generateEnhance, generateTextToImage, validateAdminPassword, getPaymentHistory } from './utils/api';
 import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
 import PhotoUpload from './components/PhotoUpload';
 import StyleSelector from './components/StyleSelector';
@@ -9,6 +9,7 @@ import LoadingScreen from './components/LoadingScreen';
 import ResultScreen from './components/ResultScreen';
 import SentScreen from './components/SentScreen';
 import ModeSelector from './components/ModeSelector';
+import CostIndicator from './components/CostIndicator';
 import MultiPhotoUpload from './components/MultiPhotoUpload';
 import PromptInput from './components/PromptInput';
 import DurationSelector from './components/DurationSelector';
@@ -86,6 +87,9 @@ export default function App() {
   const [aiClickTimer, setAiClickTimer] = useState(null);
   const [isBlocked, setIsBlocked] = useState(false);
   const [styleResolution, setStyleResolution] = useState('2K');
+  const [insufficientMsg, setInsufficientMsg] = useState(null);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const handleAiClick = () => {
     const newCount = aiClickCount + 1;
@@ -158,6 +162,19 @@ export default function App() {
     }
   }, [userId]);
 
+  useEffect(() => {
+    if (showTopUp && userId && initData) {
+      setHistoryLoading(true);
+      getPaymentHistory(userId, initData)
+        .then((res) => {
+          const data = Array.isArray(res) ? res[0] : res;
+          setPaymentHistory(data?.payments || []);
+        })
+        .catch(() => setPaymentHistory([]))
+        .finally(() => setHistoryLoading(false));
+    }
+  }, [showTopUp]);
+
   const loadUserStatus = async () => {
     try {
       const referredBy = startParam?.startsWith('ref_')
@@ -229,6 +246,7 @@ export default function App() {
     setLastFramePreview(null);
     clearAudio();
     setStyleResolution('2K');
+    setInsufficientMsg(null);
     hapticFeedback('light');
   };
 
@@ -240,6 +258,7 @@ export default function App() {
         hapticFeedback('heavy');
         await loadUserStatus();
         setShowTopUp(false);
+        setInsufficientMsg(null);
       }
     } catch (e) {
       console.error('Top-up failed:', e);
@@ -295,8 +314,10 @@ export default function App() {
 
     const hasFree = currentMode.hasFree && freeLeft > 0;
     if (!hasFree && starBalance < starCost) {
-      console.warn('[handleGenerate] insufficient balance, showing top-up');
-      setShowTopUp(true);
+      console.warn('[handleGenerate] insufficient balance, showing message + top-up');
+      setInsufficientMsg(`Недостаточно звёзд! Нужно ${starCost} ⭐, у вас ${starBalance} ⭐`);
+      hapticFeedback('medium');
+      setTimeout(() => setShowTopUp(true), 1200);
       return;
     }
 
@@ -520,6 +541,20 @@ export default function App() {
 
           <ModeSelector selectedMode={mode} onModeSelect={handleModeSelect} freeGens={freeGens} />
 
+          <CostIndicator
+            starCost={starCost}
+            freeLeft={freeLeft}
+            hasFreeGenerations={currentMode.hasFree}
+            starBalance={starBalance}
+          />
+
+          {insufficientMsg && (
+            <div className="insufficient-balance-msg">
+              <span className="insufficient-icon">⚠️</span>
+              <span>{insufficientMsg}</span>
+            </div>
+          )}
+
           {/* Stylize mode */}
           {mode === 'stylize' && (
             <>
@@ -730,13 +765,8 @@ export default function App() {
           {canGenerate && (
             <GenerateButton
               canGenerate={canGenerate}
-              freeLeft={freeLeft}
-              starBalance={starBalance}
               isLoading={isLoading}
               onClick={handleGenerate}
-              onTopUp={() => setShowTopUp(true)}
-              starCost={starCost}
-              hasFreeGenerations={currentMode.hasFree}
               buttonLabel={buttonLabels[mode]}
             />
           )}
@@ -768,6 +798,27 @@ export default function App() {
             <button className="modal-close-btn" onClick={() => setShowTopUp(false)}>
               Отмена
             </button>
+            <div className="payment-history">
+              <div className="payment-history-title">История пополнений</div>
+              {historyLoading ? (
+                <div className="payment-history-loading">Загрузка...</div>
+              ) : paymentHistory.length === 0 ? (
+                <div className="payment-history-empty">Пополнений пока нет</div>
+              ) : (
+                <div className="payment-history-list">
+                  {paymentHistory.map((p) => (
+                    <div key={p.id} className="payment-history-item">
+                      <span className="payment-history-date">
+                        {new Date(p.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                      </span>
+                      <span className="payment-history-amount">{p.stars} ⭐</span>
+                      {p.bonus > 0 && <span className="payment-history-bonus">+{p.bonus}</span>}
+                      <span className="payment-history-total">= {p.total_credited}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

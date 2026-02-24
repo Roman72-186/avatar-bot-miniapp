@@ -616,6 +616,11 @@ export async function deleteUserGeneration(userId, generationId, initData) {
   return apiRequest('delete-generation', { user_id: userId, generation_id: generationId, init_data: initData });
 }
 
+// История платежей пользователя
+export async function getPaymentHistory(userId, initData) {
+  return apiRequest('payment-history', { user_id: userId, init_data: initData }, 15000, 0);
+}
+
 // Реферальная статистика
 export async function getReferralStats(userId, initData) {
   return apiRequest('referral-stats', { user_id: userId, init_data: initData });
