@@ -2490,17 +2490,15 @@ body {
 }
 
 /* === Cost Indicator === */
-.cost-indicator {
+.cost-indicator-wrapper {
+  position: relative;
   padding: 6px 0 2px;
-  font-size: 13px;
-  color: var(--text-hint);
 }
 
-.cost-indicator-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.cost-indicator {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-hint);
 }
 
 .cost-indicator-free {
@@ -2521,25 +2519,27 @@ body {
   color: #ff4444;
 }
 
-.cost-indicator-help-btn {
-  width: 20px;
-  height: 20px;
+.help-btn-corner {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 1.5px solid var(--text-hint);
   background: transparent;
   color: var(--text-hint);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  flex-shrink: 0;
   transition: all 0.2s;
 }
 
-.cost-indicator-help-btn:active {
+.help-btn-corner:active {
   background: rgba(255, 255, 255, 0.1);
   border-color: var(--accent);
   color: var(--accent);

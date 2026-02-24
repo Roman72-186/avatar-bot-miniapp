@@ -3,7 +3,7 @@ import { useState } from 'react';
 const MODE_HELP = {
   stylize: {
     title: '🎨 Стилизация',
-    text: 'Загрузите своё фото и выберите стиль — AI превратит его в арт-аватарку. Можно выбрать аниме, 3D, масло, акварель и другие стили.',
+    text: 'Загрузите фото и выберите один из 4 стилей: Аниме, Пиксель-арт, GTA, 3D Мультяшный. Настройте креативность от 0% (ближе к оригиналу) до 100% (максимум фантазии AI).',
   },
   multi_photo: {
     title: '🖼️ Мульти-фото',
@@ -42,8 +42,8 @@ export default function CostIndicator({ starCost, freeLeft, hasFreeGenerations, 
   const help = MODE_HELP[modeId];
 
   return (
-    <div className="cost-indicator">
-      <div className="cost-indicator-row">
+    <div className="cost-indicator-wrapper">
+      <div className="cost-indicator">
         {hasFree ? (
           <span className="cost-indicator-free">
             Бесплатно ({freeLeft} осталось)
@@ -57,16 +57,16 @@ export default function CostIndicator({ starCost, freeLeft, hasFreeGenerations, 
             Стоимость: <strong>{starCost} ⭐</strong> — не хватает (у вас {starBalance} ⭐)
           </span>
         )}
-        {help && (
-          <button
-            className="cost-indicator-help-btn"
-            onClick={() => setShowHelp(!showHelp)}
-            aria-label="Подсказка"
-          >
-            ?
-          </button>
-        )}
       </div>
+      {help && (
+        <button
+          className="help-btn-corner"
+          onClick={() => setShowHelp(!showHelp)}
+          aria-label="Подсказка"
+        >
+          ?
+        </button>
+      )}
       {showHelp && help && (
         <div className="cost-indicator-tooltip">
           <div className="cost-indicator-tooltip-title">{help.title}</div>
