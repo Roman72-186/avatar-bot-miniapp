@@ -1,21 +1,77 @@
-export default function CostIndicator({ starCost, freeLeft, hasFreeGenerations, starBalance }) {
+import { useState } from 'react';
+
+const MODE_HELP = {
+  stylize: {
+    title: '🎨 Стилизация',
+    text: 'Загрузите своё фото и выберите стиль — AI превратит его в арт-аватарку. Можно выбрать аниме, 3D, масло, акварель и другие стили.',
+  },
+  multi_photo: {
+    title: '🖼️ Мульти-фото',
+    text: 'Загрузите 2–4 фотографии и напишите промпт — AI объединит их в одно изображение. Например, поместит вас в новую обстановку или создаст коллаж.',
+  },
+  style_transfer: {
+    title: '🪄 По референсу',
+    text: 'Загрузите своё фото и фото-референс стиля — AI перенесёт стиль с референса на ваше фото. Отлично для художественных эффектов.',
+  },
+  photo_to_video: {
+    title: '🎬 Фото в видео',
+    text: 'Загрузите фото — AI оживит его и создаст короткое видео. Можно выбрать длительность (5 или 10 сек), качество и добавить звук.',
+  },
+  lip_sync: {
+    title: '🗣️ Lip Sync',
+    text: 'Загрузите фото лица и запишите голосовое сообщение — AI анимирует лицо так, чтобы оно «говорило» вашим голосом.',
+  },
+  remove_bg: {
+    title: '✂️ Убрать фон',
+    text: 'Загрузите фото — AI автоматически удалит фон и вернёт изображение с прозрачным фоном. Идеально для аватарок и стикеров.',
+  },
+  enhance: {
+    title: '✨ Улучшить',
+    text: 'Загрузите фото низкого качества — AI увеличит разрешение и улучшит детализацию. Подходит для старых или размытых фотографий.',
+  },
+  text_to_image: {
+    title: '💬 Текст в фото',
+    text: 'Опишите текстом что хотите увидеть — AI сгенерирует изображение по вашему описанию. Фото загружать не нужно.',
+  },
+};
+
+export default function CostIndicator({ starCost, freeLeft, hasFreeGenerations, starBalance, modeId }) {
+  const [showHelp, setShowHelp] = useState(false);
   const hasFree = hasFreeGenerations && freeLeft > 0;
   const canAfford = hasFree || starBalance >= starCost;
+  const help = MODE_HELP[modeId];
 
   return (
     <div className="cost-indicator">
-      {hasFree ? (
-        <span className="cost-indicator-free">
-          Бесплатно ({freeLeft} осталось)
-        </span>
-      ) : canAfford ? (
-        <span className="cost-indicator-paid">
-          Стоимость: <strong>{starCost} ⭐</strong> (у вас {starBalance} ⭐)
-        </span>
-      ) : (
-        <span className="cost-indicator-insufficient">
-          Стоимость: <strong>{starCost} ⭐</strong> — не хватает (у вас {starBalance} ⭐)
-        </span>
+      <div className="cost-indicator-row">
+        {hasFree ? (
+          <span className="cost-indicator-free">
+            Бесплатно ({freeLeft} осталось)
+          </span>
+        ) : canAfford ? (
+          <span className="cost-indicator-paid">
+            Стоимость: <strong>{starCost} ⭐</strong> (у вас {starBalance} ⭐)
+          </span>
+        ) : (
+          <span className="cost-indicator-insufficient">
+            Стоимость: <strong>{starCost} ⭐</strong> — не хватает (у вас {starBalance} ⭐)
+          </span>
+        )}
+        {help && (
+          <button
+            className="cost-indicator-help-btn"
+            onClick={() => setShowHelp(!showHelp)}
+            aria-label="Подсказка"
+          >
+            ?
+          </button>
+        )}
+      </div>
+      {showHelp && help && (
+        <div className="cost-indicator-tooltip">
+          <div className="cost-indicator-tooltip-title">{help.title}</div>
+          <div className="cost-indicator-tooltip-text">{help.text}</div>
+        </div>
       )}
     </div>
   );

@@ -2491,10 +2491,16 @@ body {
 
 /* === Cost Indicator === */
 .cost-indicator {
-  text-align: center;
   padding: 6px 0 2px;
   font-size: 13px;
   color: var(--text-hint);
+}
+
+.cost-indicator-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .cost-indicator-free {
@@ -2513,6 +2519,53 @@ body {
 
 .cost-indicator-insufficient strong {
   color: #ff4444;
+}
+
+.cost-indicator-help-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-hint);
+  background: transparent;
+  color: var(--text-hint);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.cost-indicator-help-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.cost-indicator-tooltip {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm, 10px);
+  text-align: left;
+  animation: fadeIn 0.2s ease;
+}
+
+.cost-indicator-tooltip-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin-bottom: 4px;
+}
+
+.cost-indicator-tooltip-text {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
 }
 
 /* === Insufficient Balance Message === */

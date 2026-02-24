@@ -546,6 +546,7 @@ export default function App() {
             freeLeft={freeLeft}
             hasFreeGenerations={currentMode.hasFree}
             starBalance={starBalance}
+            modeId={mode}
           />
 
           {insufficientMsg && (
