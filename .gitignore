@@ -12,3 +12,8 @@ _non_project_files/
 *.py
 s3-upload-service/
 .claude/
+.mcp.json
+backup_*.json
+temp_archive.json
+foto/
+image.png
