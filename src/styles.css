@@ -2186,20 +2186,15 @@ body {
   align-items: center;
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  background: var(--card-bg);
+  background: rgba(255, 255, 255, 0.03);
   font-size: 13px;
   color: var(--text-secondary);
 }
 
-.tier-row.active {
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: var(--text);
-}
-
-.tier-row.hint {
-  font-style: italic;
-  color: var(--text-hint);
+.tier-level-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .tier-reward {
@@ -2207,11 +2202,77 @@ body {
   color: #fbbf24;
 }
 
-.tier-progress {
-  font-size: 12px;
-  color: var(--accent);
-  margin: 10px 0 0 0;
-  text-align: center;
+/* Level badges */
+.ref-level-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.ref-level-badge.l1 {
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+}
+
+.ref-level-badge.l2 {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.ref-level-badge.l3 {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.ref-level-badge.l4 {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.ref-level-badge.l5 {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+/* Level breakdown */
+.ref-level-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ref-level-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-hint);
+}
+
+.ref-level-row.has-data {
+  color: var(--text);
+}
+
+.ref-level-count {
+  flex: 1;
+  font-size: 13px;
+}
+
+.ref-level-earnings {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.ref-level-row:not(.has-data) .ref-level-earnings {
+  color: var(--text-hint);
 }
 
 .referral-list-section {
@@ -2251,11 +2312,6 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-md);
-}
-
-.ref-item-icon {
-  font-size: 18px;
-  flex-shrink: 0;
 }
 
 .ref-item-info {
