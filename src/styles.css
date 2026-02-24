@@ -2506,6 +2506,15 @@ body {
   color: #FFD700;
 }
 
+.cost-indicator-insufficient {
+  color: #ff6b6b;
+  font-weight: 500;
+}
+
+.cost-indicator-insufficient strong {
+  color: #ff4444;
+}
+
 /* === Insufficient Balance Message === */
 .insufficient-balance-msg {
   display: flex;
