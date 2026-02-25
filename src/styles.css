@@ -2526,9 +2526,9 @@ body {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 1.5px solid var(--text-hint);
-  background: transparent;
-  color: var(--text-hint);
+  border: 1.5px solid #FFD700;
+  background: rgba(255, 215, 0, 0.1);
+  color: #FFD700;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -2540,9 +2540,9 @@ body {
 }
 
 .help-btn-corner:active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: rgba(255, 215, 0, 0.25);
+  border-color: #ffe44d;
+  color: #ffe44d;
 }
 
 .help-popup-overlay {
