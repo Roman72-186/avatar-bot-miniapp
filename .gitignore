@@ -7,13 +7,8 @@ nul
 .vercel
 .env*.local
 
-# Non-project files (scripts with secrets, backups, dumps)
+# Non-project files (scripts, backups, media, dead services)
 _non_project_files/
 *.py
-s3-upload-service/
 .claude/
 .mcp.json
-backup_*.json
-temp_archive.json
-foto/
-image.png

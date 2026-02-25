@@ -31,7 +31,7 @@ export const MODES = {
     hasFree: false,
     resultType: 'image',
     endpoint: 'generate-style-transfer',
-    minPhotos: 2,
+    minPhotos: 1,
     maxPhotos: 4,
   },
   photo_to_video: {
@@ -88,6 +88,16 @@ export const MODES = {
     hasFree: false,
     resultType: 'image',
     endpoint: 'generate-text-to-image',
+  },
+  photosession: {
+    id: 'photosession',
+    name: 'Фотосессия',
+    emoji: '📸',
+    description: 'AI фотосессия — 10 фото по вашему образу',
+    starCost: 200,
+    hasFree: false,
+    resultType: 'image',
+    endpoint: 'generate-photosession',
   },
   // ai_magic: {
   //   id: 'ai_magic',

@@ -56,6 +56,18 @@ const MESSAGES_BY_MODE = {
     'Рисую детали... ✏️',
     'Финальные штрихи... 🌟',
   ],
+  photosession: [
+    'Анализирую ваше фото... 🔍',
+    'Подготовка фотосессии... 📸',
+    'Генерация образа 1/10... 🎨',
+    'Генерация образа 3/10... 🖌️',
+    'Генерация образа 5/10... ✨',
+    'Генерация образа 7/10... 🌟',
+    'Генерация образа 9/10... ⚡',
+    'Финальная обработка... 🎬',
+    'Собираю альбом... 📷',
+    'Почти готово... 🌟',
+  ],
 };
 
 const HINTS = {
@@ -67,6 +79,7 @@ const HINTS = {
   remove_bg: 'Обычно занимает 15–30 секунд',
   enhance: 'Обычно занимает 15–30 секунд',
   text_to_image: 'Обычно занимает 20–40 секунд',
+  photosession: 'Генерация 10 фото — обычно 3–6 минут',
 };
 
 export default function LoadingScreen({ mode = 'stylize' }) {
@@ -75,7 +88,7 @@ export default function LoadingScreen({ mode = 'stylize' }) {
 
   const messages = MESSAGES_BY_MODE[mode] || MESSAGES_BY_MODE.stylize;
   const hint = HINTS[mode] || HINTS.stylize;
-  const isSlowMode = mode === 'photo_to_video' || mode === 'style_transfer' || mode === 'multi_photo' || mode === 'text_to_image' || mode === 'stylize' || mode === 'lip_sync';
+  const isSlowMode = mode === 'photo_to_video' || mode === 'style_transfer' || mode === 'multi_photo' || mode === 'text_to_image' || mode === 'stylize' || mode === 'lip_sync' || mode === 'photosession';
 
   useEffect(() => {
     setMessageIndex(0);

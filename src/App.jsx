@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateLipSync, generateRemoveBg, generateEnhance, generateTextToImage, validateAdminPassword, getPaymentHistory } from './utils/api';
+import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateLipSync, generateRemoveBg, generateEnhance, generateTextToImage, generatePhotosession, validateAdminPassword, getPaymentHistory } from './utils/api';
 import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
 import PhotoUpload from './components/PhotoUpload';
 import StyleSelector from './components/StyleSelector';
@@ -15,6 +15,7 @@ import PromptInput from './components/PromptInput';
 import DurationSelector from './components/DurationSelector';
 import ResolutionSelector from './components/ResolutionSelector';
 import StyleTransferUpload from './components/StyleTransferUpload';
+import ThemeSelector from './components/ThemeSelector';
 import AdminPanel from './components/AdminPanel';
 import HistoryScreen from './components/HistoryScreen';
 import ReferralScreen from './components/ReferralScreen';
@@ -87,6 +88,7 @@ export default function App() {
   const [aiClickTimer, setAiClickTimer] = useState(null);
   const [isBlocked, setIsBlocked] = useState(false);
   const [styleResolution, setStyleResolution] = useState('2K');
+  const [selectedTheme, setSelectedTheme] = useState(null);
   const [insufficientMsg, setInsufficientMsg] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -246,6 +248,7 @@ export default function App() {
     setLastFramePreview(null);
     clearAudio();
     setStyleResolution('2K');
+    setSelectedTheme(null);
     setInsufficientMsg(null);
     hapticFeedback('light');
   };
@@ -284,7 +287,7 @@ export default function App() {
       canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 2) && promptText.trim().length > 0;
       break;
     case 'style_transfer':
-      canGenerate = photos.filter(Boolean).length >= 2 && promptText.trim().length > 0;
+      canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 1) && promptText.trim().length > 0;
       break;
     case 'photo_to_video':
       canGenerate = !!(photoFile && promptText.trim().length > 0);
@@ -298,6 +301,9 @@ export default function App() {
       break;
     case 'text_to_image':
       canGenerate = promptText.trim().length > 0;
+      break;
+    case 'photosession':
+      canGenerate = !!(photoFile && selectedTheme);
       break;
   }
 
@@ -368,6 +374,9 @@ export default function App() {
           break;
         case 'text_to_image':
           result = await generateTextToImage(userId, promptText, initData);
+          break;
+        case 'photosession':
+          result = await generatePhotosession(userId, photoFile, selectedTheme, initData);
           break;
       }
 
@@ -461,6 +470,7 @@ export default function App() {
     setLastFramePreview(null);
     clearAudio();
     setStyleResolution('2K');
+    setSelectedTheme(null);
     setError(null);
     // Keep mode selection
   };
@@ -475,6 +485,7 @@ export default function App() {
     remove_bg: '\u2702\ufe0f Убрать фон',
     enhance: '\u2728 Улучшить',
     text_to_image: '\ud83d\udcac Создать',
+    photosession: '\ud83d\udcf8 Запустить фотосессию',
   };
 
   return (
@@ -762,6 +773,22 @@ export default function App() {
               placeholder="Опишите изображение... Например: космонавт верхом на лошади в стиле ренессанс"
               maxLength={1000}
             />
+          )}
+
+          {/* Photosession mode */}
+          {mode === 'photosession' && (
+            <>
+              <PhotoUpload
+                onPhotoSelected={handlePhotoSelected}
+                uploadHint="Загрузите чёткое фото лица — AI сохранит вашу внешность на всех 10 фотографиях"
+              />
+              {photoFile && (
+                <ThemeSelector
+                  selectedTheme={selectedTheme}
+                  onThemeSelect={(theme) => { setSelectedTheme(theme); hapticFeedback('light'); }}
+                />
+              )}
+            </>
           )}
 
           {canGenerate && (

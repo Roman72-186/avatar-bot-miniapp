@@ -669,6 +669,36 @@ export async function broadcastSend(password, { messageText, photoUrl, buttons, 
   }, 300000, 0);
 }
 
+// AI Фотосессия (10 фото по образу, nano-banana-pro)
+export async function generatePhotosession(userId, file, theme, initData, onStep) {
+  const step = (msg) => { if (onStep) onStep(msg); };
+
+  try {
+    step('[1/3] Сжатие фото...');
+    const compressedFile = await compressImage(file);
+
+    step('[2/3] Подготовка фото...');
+    const base64 = await fileToBase64(compressedFile);
+
+    step('[3/3] Запуск фотосессии...');
+    console.log('[Generate] photosession → sending base64 to /generate-photosession');
+    const requestData = {
+      user_id: userId,
+      mode: 'photosession',
+      photo_base64: base64,
+      mime_type: compressedFile.type || 'image/jpeg',
+      theme,
+      init_data: initData,
+    };
+
+    return await apiRequest('generate-photosession', requestData, 360000, 0);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    if (msg.includes('Stage:')) throw error;
+    throw new Error(`Stage: PHOTOSESSION, Error: ${msg}`);
+  }
+}
+
 // NanoBanana Pro AI Avatar Generation (base64 напрямую)
 export async function generateNanoBanana(userId, files, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
