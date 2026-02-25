@@ -481,6 +481,9 @@ export default function App() {
     // Keep mode selection
   };
 
+  // URL with prompt examples (replace with actual link)
+  const PROMPT_EXAMPLES_URL = 'https://www.localbanana.io/';
+
   // Button label per mode
   const buttonLabels = {
     stylize: '\u2728 Создать аватарку',
@@ -614,6 +617,7 @@ export default function App() {
                 value={promptText}
                 onChange={setPromptText}
                 placeholder="Опишите, как объединить фото... Например: объедини лица с фото 1 и 2 в стиле киберпанк"
+                examplesUrl={PROMPT_EXAMPLES_URL}
               />
             </>
           )}
@@ -627,6 +631,7 @@ export default function App() {
                 promptText={promptText}
                 onPromptChange={setPromptText}
                 promptPlaceholder="Опишите желаемый стиль или результат..."
+                examplesUrl={PROMPT_EXAMPLES_URL}
               />
               {photos.filter(Boolean).length >= 2 && (
                 <ResolutionSelector
@@ -651,6 +656,7 @@ export default function App() {
                     value={promptText}
                     onChange={setPromptText}
                     placeholder="Опишите желаемое движение... Например: человек поворачивает голову и улыбается"
+                    examplesUrl={PROMPT_EXAMPLES_URL}
                   />
                   <DurationSelector
                     selectedDuration={videoDuration}
@@ -747,6 +753,7 @@ export default function App() {
                     value={promptText}
                     onChange={setPromptText}
                     placeholder="Опишите выражение лица (необязательно)... Например: улыбается, смотрит в камеру"
+                    examplesUrl={PROMPT_EXAMPLES_URL}
                   />
                 </>
               )}
@@ -778,6 +785,7 @@ export default function App() {
               onChange={setPromptText}
               placeholder="Опишите изображение... Например: космонавт верхом на лошади в стиле ренессанс"
               maxLength={1000}
+              examplesUrl={PROMPT_EXAMPLES_URL}
             />
           )}
 

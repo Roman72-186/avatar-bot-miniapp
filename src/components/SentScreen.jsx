@@ -1,4 +1,15 @@
+import { useTelegram } from '../hooks/useTelegram';
+
 export default function SentScreen({ onBack }) {
+  const { tg, hapticFeedback } = useTelegram();
+
+  const handleViewResult = () => {
+    hapticFeedback('light');
+    if (tg) {
+      tg.close();
+    }
+  };
+
   return (
     <div className="sent-screen">
       <div className="sent-animation">
@@ -13,11 +24,16 @@ export default function SentScreen({ onBack }) {
         Результат отправлен в чат с ботом
       </p>
       <p className="sent-hint">
-        Откройте чат с ботом, чтобы увидеть результат
+        Закройте приложение, чтобы увидеть результат
       </p>
-      <button className="action-btn primary sent-btn" onClick={onBack}>
-        Создать ещё
-      </button>
+      <div className="sent-actions">
+        <button className="sent-view-btn" onClick={handleViewResult}>
+          Посмотреть результат
+        </button>
+        <button className="sent-new-btn" onClick={onBack}>
+          Создать ещё
+        </button>
+      </div>
     </div>
   );
 }

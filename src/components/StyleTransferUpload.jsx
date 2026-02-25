@@ -13,6 +13,7 @@ export default function StyleTransferUpload({
   promptText,
   onPromptChange,
   promptPlaceholder,
+  examplesUrl,
 }) {
   const inputRefs = useRef([]);
 
@@ -101,6 +102,20 @@ export default function StyleTransferUpload({
 
       {onPromptChange && (
         <div className="reference-prompt-section">
+          {examplesUrl && (
+            <button
+              className="prompt-examples-btn"
+              onClick={() => {
+                const tg = window.Telegram?.WebApp;
+                if (tg) tg.openLink(examplesUrl);
+                else window.open(examplesUrl, '_blank');
+              }}
+              aria-label="Примеры промптов"
+              type="button"
+            >
+              <span className="prompt-examples-icon">&#x1F4A1;</span>
+            </button>
+          )}
           <textarea
             className="reference-prompt-input"
             placeholder={promptPlaceholder || 'Опишите желаемый результат (необязательно)'}

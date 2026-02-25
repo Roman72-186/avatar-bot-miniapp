@@ -1173,6 +1173,7 @@ body {
 }
 
 .reference-prompt-section {
+  position: relative;
   margin-top: 16px;
 }
 
@@ -1214,6 +1215,7 @@ body {
 }
 
 .prompt-input-wrap {
+  position: relative;
   padding: 14px;
   background: var(--card-bg);
   border: 2px solid var(--card-border);
@@ -1249,6 +1251,35 @@ body {
   font-size: 11px;
   color: var(--text-hint);
   margin-top: 6px;
+}
+
+.prompt-examples-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid #FFD700;
+  background: rgba(255, 215, 0, 0.1);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 2;
+  transition: all 0.2s;
+}
+
+.prompt-examples-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.prompt-examples-btn:active {
+  background: rgba(255, 215, 0, 0.25);
+  border-color: #ffe44d;
+  transform: scale(0.92);
 }
 
 /* === Duration Selector (legacy) === */
@@ -2484,9 +2515,52 @@ body {
   margin-bottom: 32px;
 }
 
-.sent-btn {
+.sent-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
   max-width: 280px;
+}
+
+.sent-view-btn {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #4CAF50, #66BB6A);
+  color: white;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.3);
+}
+
+.sent-view-btn:active {
+  transform: scale(0.96);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+}
+
+.sent-new-btn {
+  width: 100%;
+  padding: 14px;
+  background: transparent;
+  border: 2px solid var(--card-border);
+  border-radius: var(--radius-md);
+  color: var(--text-hint);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sent-new-btn:active {
+  transform: scale(0.97);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 /* === Cost Indicator === */

@@ -1,5 +1,29 @@
 # Лог действий — avatar-bot-miniapp
 
+## 2026-02-25
+
+### Восстановление Code-нод в workflow generate-photosession (elqdZNPtVYlanzWW)
+
+**Проблема:** 5 Code-нод потеряли jsCode, 2 ноды имели неверные имена полей
+
+**Исправления:**
+1. **Check Task Created** (ps-check-task-created) -- `$json.data.task_id` -> `$json.data.taskId` (camelCase как в API Kie.ai)
+2. **Poll Kie Status** (ps-poll-kie) -- URL теперь использует `$json.data.taskId` с fallback, вместо `$('Create Kie Task').first()` (не работает в цикле поллинга с множественными items)
+3. **Evaluate Poll** (ps-evaluate-poll) -- восстановлен jsCode: парсинг state (success/fail/processing), подсчет poll_count через item data, прокидывание taskId и data.taskId для следующей итерации цикла
+4. **Is Still Running?** (ps-is-running) -- значение проверки изменено с 'continue' на 'running' (соответствует Evaluate Poll)
+5. **Extract Result** (ps-extract-result) -- восстановлен jsCode: парсинг data.resultJson (JSON string) -> resultUrls[0], с fallback на другие поля
+6. **Rehost Result** (ps-rehost) -- восстановлен jsCode: скачивание изображения через fetch(), создание binary data для S3 Upload
+7. **Set Error Result** (ps-set-error-result) -- восстановлен jsCode: маркировка failed items с s3_url=null
+8. **Prepare Media Group** (ps-prepare-media) -- восстановлен jsCode: построение payload для Telegram sendMediaGroup
+
+**Ключевой паттерн из style_transfer (HbqrBmstlPbz9VxM):**
+- Kie.ai API: `data.taskId` (camelCase), `data.state` (success/fail), `data.resultJson` (JSON string с resultUrls)
+- Цикл поллинга: Wait -> Poll -> Is Success? -> (false) -> Is Failed? -> (false = still running) -> Wait
+
+**Верификация:** Все 11 Code-нод подтверждены как содержащие jsCode, workflow active
+
+---
+
 ## 2026-02-22
 
 ### Аудит и исправление chat_id во всех воркфлоу
@@ -561,3 +585,61 @@ OK: 8/8, Needs fix: 0, Inactive: 0
 | `src/styles.css` | Добавлены стили `.theme-selector`, `.theme-grid`, `.theme-card` |
 
 **UI-flow:** Выбор режима «Фотосессия» → загрузка фото → выбор темы (4 кнопки) → генерация → результат в Telegram DM (альбом 10 фото)
+
+### Имя реферала в уведомлениях о реферальном доходе — 8 воркфлоу
+
+**Запрос:** При начислении реферальной комиссии присылать рефереру username реферала (кто именно потратил звёзды).
+
+**Анализ:**
+- Таблица `users` имеет колонку `username` (text, nullable), но **НЕТ** `first_name`
+- Username сохраняется при регистрации через `/start` и обновляется при каждом визите
+- Не все пользователи Telegram имеют username — нужен fallback
+
+**Решение:** Модификация SQL запроса в `Apply Referral Commission` — CTE с CROSS JOIN для получения username реферала в одном запросе.
+
+**Было (SQL):**
+```sql
+SELECT * FROM apply_referral_commission(ref_user_id, actual_cost, 'mode');
+```
+**Стало (SQL):**
+```sql
+WITH commissions AS (
+  SELECT * FROM apply_referral_commission(ref_user_id, actual_cost, 'mode')
+), ref_info AS (
+  SELECT username FROM users WHERE id = ref_user_id
+)
+SELECT c.parent_id, c.level, c.commission, COALESCE(r.username, '') AS ref_username
+FROM commissions c, ref_info r;
+```
+
+**Было (текст уведомления):**
+```
+💰 Реферальный доход!
+Партнёр {level}-го уровня воспользовался генерацией.
+Начислено: +{commission} ⭐
+```
+**Стало:**
+```
+💰 Реферальный доход!
+Партнёр {level}-го уровня (@username) воспользовался генерацией.
+Начислено: +{commission} ⭐
+```
+Если username пустой — скобки не показываются.
+
+**Обновлённые воркфлоу (все 8):**
+| Workflow | ID |
+|---|---|
+| generate (Стилизация) | `3iZY--GtxZ556edSgZQuB` |
+| generate-multi (Мультифото) | `FXRCdsL4ULHevtbz` |
+| generate-style-transfer (По референсу) | `HbqrBmstlPbz9VxM` |
+| generate-video (Фото в видео) | `fmTA4l0XfQXTajGI` |
+| Lip Sync | `whdEwP3wRDredCOw` |
+| generate-remove-bg (Убрать фон) | `z29Bx9CRXKvcHgvI` |
+| generate-enhance (Улучшение) | `Lfra98zYiGA0yKmD` |
+| generate-text-to-image (Текст в фото) | `QP37jmBYCpeaCzYV` |
+
+### Удалён временный workflow
+
+- **ID:** `9GTgFBEqi30M8fAR` (`[TEMP] Get function definition`)
+- Использовался для попытки запроса определения SQL-функции через webhook (не удался — 404)
+- Удалён за ненадобностью
