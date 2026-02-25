@@ -111,15 +111,17 @@ export function getStarCost(modeId, options = {}) {
   if (!mode) return 0;
   if (typeof mode.starCost === 'number') return mode.starCost;
   if (typeof mode.starCost === 'object') {
+    // Style transfer: photoCount + resolution
+    if (modeId === 'style_transfer') {
+      const photoCount = options.photoCount || 2;
+      const resolution = options.resolution || '2K';
+      const bucket = photoCount <= 2 ? '2' : '3';
+      return mode.starCost[`${bucket}_${resolution}`] || 30;
+    }
     // Video pricing: duration + quality + sound
     if (options.duration && options.videoQuality !== undefined) {
       const key = `${options.duration}_${options.videoQuality}_${options.videoSound ? 'on' : 'off'}`;
       return mode.starCost[key] || 155;
-    }
-    // Style transfer: photoCount + resolution
-    if (options.photoCount !== undefined && options.resolution) {
-      const bucket = options.photoCount <= 2 ? '2' : '3';
-      return mode.starCost[`${bucket}_${options.resolution}`] || 30;
     }
   }
   return 25;
