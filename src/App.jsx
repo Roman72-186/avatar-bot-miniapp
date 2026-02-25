@@ -760,6 +760,7 @@ export default function App() {
               value={promptText}
               onChange={setPromptText}
               placeholder="Опишите изображение... Например: космонавт верхом на лошади в стиле ренессанс"
+              maxLength={1000}
             />
           )}
 
