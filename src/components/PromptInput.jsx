@@ -12,16 +12,6 @@ export default function PromptInput({ value, onChange, placeholder, maxLength = 
     <div className="prompt-input-container">
       <div className="prompt-input-label">Промпт</div>
       <div className="prompt-input-wrap">
-        {examplesUrl && (
-          <button
-            className="prompt-examples-btn"
-            onClick={handleExamples}
-            aria-label="Примеры промптов"
-            type="button"
-          >
-            <span className="prompt-examples-icon">&#x1F4A1;</span>
-          </button>
-        )}
         <textarea
           className="prompt-textarea"
           value={value}
@@ -33,6 +23,11 @@ export default function PromptInput({ value, onChange, placeholder, maxLength = 
           {value.length} / {maxLength}
         </div>
       </div>
+      {examplesUrl && (
+        <button className="prompt-examples-link" onClick={handleExamples} type="button">
+          Примеры промптов &rarr;
+        </button>
+      )}
     </div>
   );
 }

@@ -102,20 +102,6 @@ export default function StyleTransferUpload({
 
       {onPromptChange && (
         <div className="reference-prompt-section">
-          {examplesUrl && (
-            <button
-              className="prompt-examples-btn"
-              onClick={() => {
-                const tg = window.Telegram?.WebApp;
-                if (tg) tg.openLink(examplesUrl);
-                else window.open(examplesUrl, '_blank');
-              }}
-              aria-label="Примеры промптов"
-              type="button"
-            >
-              <span className="prompt-examples-icon">&#x1F4A1;</span>
-            </button>
-          )}
           <textarea
             className="reference-prompt-input"
             placeholder={promptPlaceholder || 'Опишите желаемый результат (необязательно)'}
@@ -123,6 +109,19 @@ export default function StyleTransferUpload({
             onChange={(e) => onPromptChange(e.target.value)}
             rows={3}
           />
+          {examplesUrl && (
+            <button
+              className="prompt-examples-link"
+              onClick={() => {
+                const tg = window.Telegram?.WebApp;
+                if (tg) tg.openLink(examplesUrl);
+                else window.open(examplesUrl, '_blank');
+              }}
+              type="button"
+            >
+              Примеры промптов &rarr;
+            </button>
+          )}
         </div>
       )}
     </div>

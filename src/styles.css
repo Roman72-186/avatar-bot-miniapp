@@ -1253,33 +1253,21 @@ body {
   margin-top: 6px;
 }
 
-.prompt-examples-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1.5px solid #FFD700;
-  background: rgba(255, 215, 0, 0.1);
+.prompt-examples-link {
+  background: none;
+  border: none;
+  color: #7C5CFC;
+  font-size: 13px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  z-index: 2;
-  transition: all 0.2s;
+  padding: 6px 0 0;
+  text-align: left;
+  font-family: inherit;
+  opacity: 0.85;
+  transition: opacity 0.2s;
 }
 
-.prompt-examples-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.prompt-examples-btn:active {
-  background: rgba(255, 215, 0, 0.25);
-  border-color: #ffe44d;
-  transform: scale(0.92);
+.prompt-examples-link:active {
+  opacity: 1;
 }
 
 /* === Duration Selector (legacy) === */
