@@ -670,18 +670,22 @@ export async function broadcastSend(password, { messageText, photoUrl, buttons, 
 }
 
 // AI Фотосессия (10 фото по образу, nano-banana-pro)
-export async function generatePhotosession(userId, file, theme, initData, onStep) {
+export async function generatePhotosession(userId, file, file2, theme, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
 
   try {
-    step('[1/3] Сжатие фото...');
+    step(file2 ? '[1/3] Сжатие 2 фото...' : '[1/3] Сжатие фото...');
     const compressedFile = await compressImage(file);
+    let compressed2 = null;
+    if (file2) compressed2 = await compressImage(file2);
 
     step('[2/3] Подготовка фото...');
     const base64 = await fileToBase64(compressedFile);
+    let base64_2 = null;
+    if (compressed2) base64_2 = await fileToBase64(compressed2);
 
     step('[3/3] Запуск фотосессии...');
-    console.log('[Generate] photosession → sending base64 to /generate-photosession');
+    console.log('[Generate] photosession → sending base64 to /generate-photosession', { hasPhoto2: !!base64_2 });
     const requestData = {
       user_id: userId,
       mode: 'photosession',
@@ -690,6 +694,10 @@ export async function generatePhotosession(userId, file, theme, initData, onStep
       theme,
       init_data: initData,
     };
+    if (base64_2) {
+      requestData.photo2_base64 = base64_2;
+      requestData.photo2_mime_type = compressed2.type || 'image/jpeg';
+    }
 
     return await apiRequest('generate-photosession', requestData, 360000, 0);
   } catch (error) {

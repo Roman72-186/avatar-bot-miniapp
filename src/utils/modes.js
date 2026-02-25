@@ -98,6 +98,8 @@ export const MODES = {
     hasFree: false,
     resultType: 'image',
     endpoint: 'generate-photosession',
+    minPhotos: 1,
+    maxPhotos: 2,
   },
   // ai_magic: {
   //   id: 'ai_magic',

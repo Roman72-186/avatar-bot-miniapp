@@ -75,6 +75,8 @@ export default function App() {
   const [videoAspect, setVideoAspect] = useState('9:16');
   const [lastFrameFile, setLastFrameFile] = useState(null);
   const [lastFramePreview, setLastFramePreview] = useState(null);
+  const [photo2File, setPhoto2File] = useState(null);
+  const [photo2Preview, setPhoto2Preview] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
   const [audioName, setAudioName] = useState(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
@@ -246,6 +248,8 @@ export default function App() {
     setVideoAspect('9:16');
     setLastFrameFile(null);
     setLastFramePreview(null);
+    setPhoto2File(null);
+    setPhoto2Preview(null);
     clearAudio();
     setStyleResolution('2K');
     setSelectedTheme(null);
@@ -376,7 +380,7 @@ export default function App() {
           result = await generateTextToImage(userId, promptText, initData);
           break;
         case 'photosession':
-          result = await generatePhotosession(userId, photoFile, selectedTheme, initData);
+          result = await generatePhotosession(userId, photoFile, photo2File, selectedTheme, initData);
           break;
       }
 
@@ -468,6 +472,8 @@ export default function App() {
     setVideoAspect('9:16');
     setLastFrameFile(null);
     setLastFramePreview(null);
+    setPhoto2File(null);
+    setPhoto2Preview(null);
     clearAudio();
     setStyleResolution('2K');
     setSelectedTheme(null);
@@ -783,10 +789,36 @@ export default function App() {
                 uploadHint="Загрузите чёткое фото лица — AI сохранит вашу внешность на всех 10 фотографиях"
               />
               {photoFile && (
-                <ThemeSelector
-                  selectedTheme={selectedTheme}
-                  onThemeSelect={(theme) => { setSelectedTheme(theme); hapticFeedback('light'); }}
-                />
+                <>
+                  <div className="last-frame-section">
+                    <div className="last-frame-label">Второе фото <span className="optional-tag">необязательно</span></div>
+                    <p className="last-frame-hint">Добавьте фото с другого ракурса — AI лучше сохранит внешность</p>
+                    {photo2Preview ? (
+                      <div className="last-frame-preview">
+                        <img src={photo2Preview} alt="Photo 2" />
+                        <button className="last-frame-remove" onClick={() => { setPhoto2File(null); setPhoto2Preview(null); }}>✕</button>
+                      </div>
+                    ) : (
+                      <label className="last-frame-upload-btn">
+                        + Добавить фото
+                        <input type="file" accept="image/*" hidden onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            setPhoto2File(f);
+                            const reader = new FileReader();
+                            reader.onload = (ev) => setPhoto2Preview(ev.target.result);
+                            reader.readAsDataURL(f);
+                            hapticFeedback('light');
+                          }
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                  <ThemeSelector
+                    selectedTheme={selectedTheme}
+                    onThemeSelect={(theme) => { setSelectedTheme(theme); hapticFeedback('light'); }}
+                  />
+                </>
               )}
             </>
           )}
