@@ -68,9 +68,12 @@ export default function CostIndicator({ starCost, freeLeft, hasFreeGenerations, 
         </button>
       )}
       {showHelp && help && (
-        <div className="cost-indicator-tooltip">
-          <div className="cost-indicator-tooltip-title">{help.title}</div>
-          <div className="cost-indicator-tooltip-text">{help.text}</div>
+        <div className="help-popup-overlay" onClick={() => setShowHelp(false)}>
+          <div className="help-popup" onClick={(e) => e.stopPropagation()}>
+            <button className="help-popup-close" onClick={() => setShowHelp(false)}>&times;</button>
+            <div className="help-popup-title">{help.title}</div>
+            <div className="help-popup-text">{help.text}</div>
+          </div>
         </div>
       )}
     </div>
