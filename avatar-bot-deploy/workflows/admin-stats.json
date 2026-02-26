@@ -1,0 +1,466 @@
+{
+  "name": "[MINIAPP] admin-stats",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "admin-stats",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "check-password-1",
+      "name": "Check Password",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.body.password }}",
+              "rightValue": "123hors456",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "get-stats-1",
+      "name": "Get Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        730,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT COUNT(*) FROM users) as total_users,\n  (SELECT COALESCE(SUM(star_balance), 0) FROM users) as total_star_balance,\n  (SELECT COUNT(*) FROM users WHERE star_balance > 0) as paying_users,\n  (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '24 hours') as new_users_24h,\n  (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '7 days') as new_users_7d;",
+        "options": {}
+      }
+    },
+    {
+      "id": "get-top-users-1",
+      "name": "Get Top Users",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        980,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id as user_id, username, star_balance, COALESCE(blocked, FALSE) as blocked, created_at, referred_by FROM users ORDER BY created_at DESC;",
+        "options": {}
+      }
+    },
+    {
+      "id": "build-response-1",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1230,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const stats = $('Get Stats').first().json;\nconst allUsers = $('Get Top Users').all().map(item => item.json);\n\nreturn [{json: {\n  total_users: Number(stats.total_users) || 0,\n  total_star_balance: Number(stats.total_star_balance) || 0,\n  paying_users: Number(stats.paying_users) || 0,\n  new_users_24h: Number(stats.new_users_24h) || 0,\n  new_users_7d: Number(stats.new_users_7d) || 0,\n  top_users: allUsers\n}}];"
+      }
+    },
+    {
+      "id": "respond-ok-1",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1480,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      }
+    },
+    {
+      "id": "respond-denied-1",
+      "name": "Respond Denied",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        730,
+        420
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\": \"access_denied\", \"message\": \"Invalid password\"}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Password": {
+      "main": [
+        [
+          {
+            "node": "Get Stats",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Denied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Stats": {
+      "main": [
+        [
+          {
+            "node": "Get Top Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Top Users": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "89244f4c-0d31-4825-baa3-b7aa152c1bb3",
+  "versionCounter": 60,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-11T11:22:20.771Z",
+      "createdAt": "2026-02-11T11:22:20.771Z",
+      "role": "workflow:owner",
+      "workflowId": "qgN7W1DXPTzYKU8d",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-24T04:03:07.175Z",
+    "createdAt": "2026-02-24T04:03:07.175Z",
+    "versionId": "89244f4c-0d31-4825-baa3-b7aa152c1bb3",
+    "workflowId": "qgN7W1DXPTzYKU8d",
+    "nodes": [
+      {
+        "id": "webhook-1",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          250,
+          300
+        ],
+        "webhookId": "admin-stats",
+        "parameters": {
+          "path": "admin-stats",
+          "httpMethod": "POST",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "check-password-1",
+        "name": "Check Password",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          480,
+          300
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "cond1",
+                "leftValue": "={{ $json.body.password }}",
+                "rightValue": "123hors456",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "get-stats-1",
+        "name": "Get Stats",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          730,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT\n  (SELECT COUNT(*) FROM users) as total_users,\n  (SELECT COALESCE(SUM(star_balance), 0) FROM users) as total_star_balance,\n  (SELECT COUNT(*) FROM users WHERE star_balance > 0) as paying_users,\n  (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '24 hours') as new_users_24h,\n  (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '7 days') as new_users_7d;",
+          "options": {}
+        }
+      },
+      {
+        "id": "get-top-users-1",
+        "name": "Get Top Users",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          980,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id as user_id, username, star_balance, COALESCE(blocked, FALSE) as blocked, created_at, referred_by FROM users ORDER BY created_at DESC;",
+          "options": {}
+        }
+      },
+      {
+        "id": "build-response-1",
+        "name": "Build Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1230,
+          200
+        ],
+        "parameters": {
+          "jsCode": "const stats = $('Get Stats').first().json;\nconst allUsers = $('Get Top Users').all().map(item => item.json);\n\nreturn [{json: {\n  total_users: Number(stats.total_users) || 0,\n  total_star_balance: Number(stats.total_star_balance) || 0,\n  paying_users: Number(stats.paying_users) || 0,\n  new_users_24h: Number(stats.new_users_24h) || 0,\n  new_users_7d: Number(stats.new_users_7d) || 0,\n  top_users: allUsers\n}}];"
+        }
+      },
+      {
+        "id": "respond-ok-1",
+        "name": "Respond OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1480,
+          200
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json }}"
+        }
+      },
+      {
+        "id": "respond-denied-1",
+        "name": "Respond Denied",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          730,
+          420
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={\"error\": \"access_denied\", \"message\": \"Invalid password\"}",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Check Password",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Password": {
+        "main": [
+          [
+            {
+              "node": "Get Stats",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Denied",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Stats": {
+        "main": [
+          [
+            {
+              "node": "Get Top Users",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Top Users": {
+        "main": [
+          [
+            {
+              "node": "Build Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Response": {
+        "main": [
+          [
+            {
+              "node": "Respond OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T04:03:07.216Z",
+        "id": 2146,
+        "workflowId": "qgN7W1DXPTzYKU8d",
+        "versionId": "89244f4c-0d31-4825-baa3-b7aa152c1bb3",
+        "event": "deactivated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      },
+      {
+        "createdAt": "2026-02-24T04:03:07.230Z",
+        "id": 2147,
+        "workflowId": "qgN7W1DXPTzYKU8d",
+        "versionId": "89244f4c-0d31-4825-baa3-b7aa152c1bb3",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}

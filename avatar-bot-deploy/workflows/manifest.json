@@ -1,0 +1,194 @@
+{
+  "version": "1.0",
+  "description": "Avatar Bot n8n workflow templates",
+  "workflows": [
+    {
+      "filename": "generate.json",
+      "original_name": "[MINIAPP] generate",
+      "original_id": "3iZY--GtxZ556edSgZQuB",
+      "nodes_count": 37
+    },
+    {
+      "filename": "generate-multi.json",
+      "original_name": "[MINIAPP] generate-multi",
+      "original_id": "FXRCdsL4ULHevtbz",
+      "nodes_count": 42
+    },
+    {
+      "filename": "generate-style-transfer.json",
+      "original_name": "[MINIAPP] generate-style-transfer",
+      "original_id": "HbqrBmstlPbz9VxM",
+      "nodes_count": 41
+    },
+    {
+      "filename": "generate-video.json",
+      "original_name": "[MINIAPP] generate-video",
+      "original_id": "fmTA4l0XfQXTajGI",
+      "nodes_count": 40
+    },
+    {
+      "filename": "generate-lip-sync.json",
+      "original_name": "Lip Sync (Kling AI Avatar Pro)",
+      "original_id": "whdEwP3wRDredCOw",
+      "nodes_count": 39
+    },
+    {
+      "filename": "generate-remove-bg.json",
+      "original_name": "[MINIAPP] generate-remove-bg",
+      "original_id": "z29Bx9CRXKvcHgvI",
+      "nodes_count": 39
+    },
+    {
+      "filename": "generate-enhance.json",
+      "original_name": "[MINIAPP] generate-enhance",
+      "original_id": "Lfra98zYiGA0yKmD",
+      "nodes_count": 39
+    },
+    {
+      "filename": "generate-text-to-image.json",
+      "original_name": "[MINIAPP] generate-text-to-image",
+      "original_id": "QP37jmBYCpeaCzYV",
+      "nodes_count": 37
+    },
+    {
+      "filename": "generate-photosession.json",
+      "original_name": "[MINIAPP] generate-photosession",
+      "original_id": "elqdZNPtVYlanzWW",
+      "nodes_count": 33
+    },
+    {
+      "filename": "s3-upload.json",
+      "original_name": "[MINIAPP] s3-upload",
+      "original_id": "kbXCIfMqXLu6K1yl",
+      "nodes_count": 4
+    },
+    {
+      "filename": "user-status.json",
+      "original_name": "[MINIAPP] user-status",
+      "original_id": "FqO0ER3eF7GgbESNhfC9C",
+      "nodes_count": 6
+    },
+    {
+      "filename": "create-invoice.json",
+      "original_name": "[MINIAPP] create-invoice",
+      "original_id": "1P4GoW6uTgsOdFWX",
+      "nodes_count": 6
+    },
+    {
+      "filename": "user-generations.json",
+      "original_name": "[MINIAPP] user-generations",
+      "original_id": "5Cl7W0f5c1KvoHkb",
+      "nodes_count": 7
+    },
+    {
+      "filename": "delete-generation.json",
+      "original_name": "delete-generation",
+      "original_id": "eBrXU6DHAJNZqsc2",
+      "nodes_count": 6
+    },
+    {
+      "filename": "payment-history.json",
+      "original_name": "[MINIAPP] payment-history",
+      "original_id": "oo87087AVDIY3R3Z",
+      "nodes_count": 7
+    },
+    {
+      "filename": "referral-stats.json",
+      "original_name": "[MINIAPP] referral-stats",
+      "original_id": "fxEYkG4lywhfuoLX",
+      "nodes_count": 6
+    },
+    {
+      "filename": "admin-stats.json",
+      "original_name": "[MINIAPP] admin-stats",
+      "original_id": "qgN7W1DXPTzYKU8d",
+      "nodes_count": 7
+    },
+    {
+      "filename": "add-stars.json",
+      "original_name": "[MINIAPP] add-stars",
+      "original_id": "Q4ND53LV9pUdviP5",
+      "nodes_count": 8
+    },
+    {
+      "filename": "block-user.json",
+      "original_name": "[MINIAPP] block-user",
+      "original_id": "KiYTLoH2eIPmE4aN",
+      "nodes_count": 8
+    },
+    {
+      "filename": "delete-user.json",
+      "original_name": "[MINIAPP] delete-user",
+      "original_id": "p6AeskFh67roLORQ",
+      "nodes_count": 8
+    },
+    {
+      "filename": "admin-broadcast-preview.json",
+      "original_name": "[MINIAPP] admin-broadcast-preview",
+      "original_id": "qlKRx4whCaMyvbjb",
+      "nodes_count": 7
+    },
+    {
+      "filename": "admin-broadcast.json",
+      "original_name": "[MINIAPP] admin-broadcast",
+      "original_id": "1ItmJTcUOGYnyfsE",
+      "nodes_count": 19
+    },
+    {
+      "filename": "bot-start-handler.json",
+      "original_name": "[DEV] [MINIAPP] bot-start-handler",
+      "original_id": "Z8oemCWVXaK6qJPQ",
+      "nodes_count": 30
+    }
+  ],
+  "import_order": [
+    "generate.json",
+    "generate-multi.json",
+    "generate-style-transfer.json",
+    "generate-video.json",
+    "generate-lip-sync.json",
+    "generate-remove-bg.json",
+    "generate-enhance.json",
+    "generate-text-to-image.json",
+    "generate-photosession.json",
+    "s3-upload.json",
+    "user-status.json",
+    "create-invoice.json",
+    "user-generations.json",
+    "delete-generation.json",
+    "payment-history.json",
+    "referral-stats.json",
+    "admin-stats.json",
+    "add-stars.json",
+    "block-user.json",
+    "delete-user.json",
+    "admin-broadcast-preview.json",
+    "admin-broadcast.json",
+    "bot-start-handler.json"
+  ],
+  "activation_order": [
+    "generate.json",
+    "generate-multi.json",
+    "generate-style-transfer.json",
+    "generate-video.json",
+    "generate-lip-sync.json",
+    "generate-remove-bg.json",
+    "generate-enhance.json",
+    "generate-text-to-image.json",
+    "generate-photosession.json",
+    "s3-upload.json",
+    "user-status.json",
+    "create-invoice.json",
+    "user-generations.json",
+    "delete-generation.json",
+    "payment-history.json",
+    "referral-stats.json",
+    "admin-stats.json",
+    "add-stars.json",
+    "block-user.json",
+    "delete-user.json",
+    "admin-broadcast-preview.json",
+    "admin-broadcast.json",
+    "bot-start-handler.json"
+  ]
+}

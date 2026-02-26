@@ -1,0 +1,2595 @@
+{
+  "name": "Lip Sync (Kling AI Avatar Pro)",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-lip-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "id": "c6813b1c-b512-47e7-b82d-acaece94e1d9",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook').first().json.body;\nreturn [{ json: {\n  user_id: body.user_id,\n  image_url: body.image_url,\n  audio_url: body.audio_url,\n  prompt: body.prompt || '',\n  init_data: body.init_data,\n    cost: 250,\n  mode: 'lip_sync'\n} }];"
+      },
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        300
+      ],
+      "id": "216e77be-ead0-4bb2-8c48-4ecebdd7d1e6"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT id, star_balance FROM users WHERE id = {{ $json.user_id }}",
+        "options": {}
+      },
+      "name": "Check Balance",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1280,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "id": "124681c4-58ef-4fdd-9536-2a1a407d392a"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.star_balance }}",
+              "rightValue": "={{ $('Parse Input').first().json.cost }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Balance?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        300
+      ],
+      "id": "5373a282-b913-4d12-ad17-df87d6ed81bf"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\": \"insufficient_balance\", \"required\": {{ $('Parse Input').first().json.cost }}, \"current\": {{ $json.star_balance }} }",
+        "options": {}
+      },
+      "name": "Respond No Balance",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        500
+      ],
+      "id": "b31666f0-5d7c-4f87-9902-c19912cca9d3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE users SET star_balance = star_balance - {{ $('Parse Input').first().json.cost }} WHERE id = {{ $('Parse Input').first().json.user_id }}",
+        "options": {}
+      },
+      "name": "Deduct Stars",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        7000,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "id": "a72af88f-c4a2-46dd-8aa1-7e5a8d45f243"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"ok\", \"sent\": true}",
+        "options": {}
+      },
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        7260,
+        200
+      ],
+      "id": "13d5769b-6fde-4b49-8f13-7bab44b9aa79"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\": \"generation_failed\", \"message\": \"AI generation failed. Please try again.\"}",
+        "options": {}
+      },
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3100,
+        700
+      ],
+      "id": "eb277085-4b58-4b60-9272-ba6c21374162"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst webhookData = $('Webhook').first().json.body;\n\nlet videoUrl = '';\ntry {\n  const rj = JSON.parse(data.data.resultJson);\n  videoUrl = rj.resultUrls?.[0] || '';\n} catch(e) {}\n\nif (!videoUrl) {\n  return [{json: {\n    status: 'error',\n    error_msg: 'No video in Kie.ai lip sync response: ' + JSON.stringify(data.data || {}).substring(0, 200),\n    user_id: webhookData.user_id\n  }}];\n}\n\nreturn [{json: {\n  status: 'ok',\n  video_url: videoUrl,\n  user_id: webhookData.user_id\n}}];"
+      },
+      "name": "Check Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        200
+      ],
+      "id": "9963668a-b1fa-470a-a7fe-127317f732ec"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "status_check",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "ok",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Is OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4660,
+        200
+      ],
+      "id": "6a0fcf9c-9ab9-4b43-b7e2-22917ea907e6"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO generations (user_id, mode, result_type, result_url, prompt) VALUES ('{{ $(\"Webhook\").first().json.body.user_id }}', 'photo_to_video', 'video', '{{ $(\"Check Result\").first().json.video_url }}', '{{ $(\"Webhook\").first().json.body.prompt || '' }}')",
+        "options": {}
+      },
+      "name": "Save Generation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        6740,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "id": "347aa6fa-41b2-40cf-9b24-93cf1e050ad4"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT thread_id FROM user_topics WHERE user_id = '{{ $(\"Webhook\").first().json.body.user_id }}' AND mode = 'photo_to_video'",
+        "options": {}
+      },
+      "name": "Get User Topic",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        4920,
+        200
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "id": "067af7bd-8cb3-40cf-85f4-5eff9d4a1916"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO user_topics (user_id, mode, thread_id) VALUES ('{{ $(\"Prepare Send\").first().json.user_id }}', '{{ $(\"Prepare Send\").first().json.mode }}', {{ $(\"Create Topic\").first().json.result.message_thread_id || $(\"Prepare Send\").first().json.thread_id || 0 }}) ON CONFLICT (user_id, mode) DO UPDATE SET thread_id = EXCLUDED.thread_id",
+        "options": {}
+      },
+      "name": "Save Topic",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        5960,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "continueOnFail": false,
+      "onError": "continueRegularOutput",
+      "id": "d5359f35-652e-44e7-8531-9d5107b33652"
+    },
+    {
+      "parameters": {
+        "jsCode": "const BOT_TOKEN = '{{BOT_TOKEN}}';\nconst ADMIN_CHAT_ID = '5444227047';\nconst mode = 'lip_sync';\nlet errorMsg = 'Unknown error';\nlet userId = 'unknown';\ntry {\n  const input = $input.first().json;\n  errorMsg = input.error_msg || input.error || input.detail || JSON.stringify(input).substring(0, 200);\n} catch(e) { errorMsg = 'Failed to parse error: ' + e.message; }\ntry { userId = $('Webhook').first().json.body.user_id || 'unknown'; } catch(e) {}\nconst text = '⚠️ Error in ' + mode + '\\nUser: ' + userId + '\\nError: ' + errorMsg;\ntry {\n  await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {\n    method: 'POST', headers: {'Content-Type': 'application/json'},\n    body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, text: text })\n  });\n} catch(e) {}\nreturn $input.all();"
+      },
+      "name": "Error Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4920,
+        700
+      ],
+      "onError": "continueRegularOutput",
+      "id": "ea224f8e-8a6c-476c-b345-bd9e37beffe6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare data for Telegram HTTP Request nodes (no HTTP calls here)\nconst userId = $(\"Webhook\").first().json.body.user_id;\nconst mediaUrl = $(\"Check Result\").first().json.video_url;\nconst prompt = $(\"Webhook\").first().json.body.prompt || '';\nconst topicRows = $('Get User Topic').all();\nlet threadId = null;\nif (topicRows.length > 0 && topicRows[0].json.thread_id) {\n  threadId = topicRows[0].json.thread_id;\n}\n\nconst caption = '🎬 Видео' + (prompt ? '\\n\\n📝 Prompt: ' + prompt.substring(0, 800) : '');\n\n// Build send body\nconst sendBody = {\n  chat_id: String(userId),\n  video: mediaUrl,\n  caption: caption\n};\nif (threadId) sendBody.message_thread_id = threadId;\n\nreturn [{ json: {\n  user_id: String(userId),\n  mode: 'photo_to_video',\n  thread_id: threadId,\n  needs_topic: !threadId,\n  send_body: JSON.stringify(sendBody),\n  send_method: 'sendVideo',\n  icon_color: 16766590,\n  caption: caption,\n  media_url: mediaUrl\n} }];"
+      },
+      "name": "Prepare Send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5180,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "id": "5d3f454b-291c-4fd7-b72f-fb97a9bbb36e"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{BOT_TOKEN}}/createForumTopic",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.user_id, name: $json.caption, icon_color: $json.icon_color }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Create Topic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5700,
+        400
+      ],
+      "executeOnce": true,
+      "continueOnFail": false,
+      "onError": "continueRegularOutput",
+      "id": "8fbb6404-2ed6-4c15-bead-c07a2432de6f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{BOT_TOKEN}}/sendVideo",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.user_id }}"
+            },
+            {
+              "name": "video",
+              "value": "={{ $('Check Result').first().json.video_url }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.caption }}"
+            },
+            {
+              "name": "message_thread_id",
+              "value": "={{ $json.thread_id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6480,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "continueOnFail": false,
+      "onError": "continueRegularOutput",
+      "id": "0898f012-8d7f-4b6b-9612-4ffe9117510d"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "needs_topic_check",
+              "leftValue": "={{ $json.needs_topic ? 1 : 0 }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Need Topic?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5440,
+        200
+      ],
+      "id": "e4d7139b-5e45-4012-b7aa-d90396216c3c"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pass through Prepare Send data with thread_id from newly created topic\nconst prepData = $(\"Prepare Send\").first().json;\nlet newThreadId = null;\ntry {\n  const createResult = $(\"Create Topic\").first().json;\n  newThreadId = createResult.result ? createResult.result.message_thread_id : null;\n} catch(e) {}\n\nreturn [{ json: {\n  ...prepData,\n  thread_id: newThreadId || prepData.thread_id\n} }];"
+      },
+      "name": "Finalize Send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6220,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "id": "dcd7b641-60f2-4e2d-b5cd-815f6e9ede22"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Kie.ai request (lip-sync)\nconst body = $('Parse Input').first().json;\n\n// Get URLs from Collect URLs node (S3 uploaded URLs), not from Parse Input\nconst collectData = $('Collect URLs').first().json;\nconst imageUrl = collectData.image_url || body.image_url;\nconst audioUrl = collectData.audio_url || body.audio_url;\n\nreturn [{ json: {\n  model: 'kling/ai-avatar-pro',\n  input: {\n    image_url: imageUrl,\n    audio_url: audioUrl,\n    prompt: body.prompt || ''\n  }\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2580,
+        300
+      ],
+      "name": "Prepare Kie Request",
+      "id": "0ac2dfd0-f881-4991-9c13-ece97d787b29"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.kie.ai/api/v1/jobs/createTask",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 3488c4a7497efbdaa035822971c57e0a"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2840,
+        300
+      ],
+      "name": "Create Kie Task",
+      "onError": "continueRegularOutput",
+      "id": "b8accb04-f367-4e26-a45b-11f61e85b1c0"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "tc-vid",
+              "leftValue": "={{ $json.code }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3100,
+        300
+      ],
+      "name": "Task Created?",
+      "id": "baf6b0a2-18ad-4fcd-ac7c-6f92ef632e61"
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3360,
+        300
+      ],
+      "name": "Wait",
+      "id": "98d949e3-8a4c-44f3-af34-d607553ece2c"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.kie.ai/api/v1/jobs/recordInfo?taskId={{ $('Create Kie Task').first().json.data.taskId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 3488c4a7497efbdaa035822971c57e0a"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3620,
+        300
+      ],
+      "name": "Poll Kie Status",
+      "onError": "continueRegularOutput",
+      "id": "5e29d375-c7fd-4d3b-b26a-20bc0b260562"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json;\nconst state = data.data?.state || 'unknown';\nconst staticData = $getWorkflowStaticData('global');\nconst execId = $execution.id;\nconst key = 'poll_' + execId;\nstaticData[key] = (staticData[key] || 0) + 1;\nconst pollCount = staticData[key];\nconst MAX_POLLS = 24; // 24 x 15s = 6 min max (video takes longer)\n\nlet status = 'continue';\nif (state === 'success') status = 'success';\nelse if (state === 'fail' || pollCount >= MAX_POLLS) status = 'error';\n\nreturn [{ json: { ...data, _poll_status: status, _poll_count: pollCount } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3880,
+        300
+      ],
+      "name": "Evaluate Poll",
+      "id": "d75d0303-0f20-449c-9520-6f25cc97888b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-vid",
+              "leftValue": "={{ $json._poll_status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4140,
+        300
+      ],
+      "name": "Is Success?",
+      "id": "c716f227-6b38-4ac9-8d73-6805bd4c61e2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "if-vid",
+              "leftValue": "={{ $json._poll_status }}",
+              "rightValue": "error",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4400,
+        400
+      ],
+      "name": "Is Failed?",
+      "id": "e6f4de82-12be-4596-af0b-6c5ed0174654",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const BOT_TOKEN = '{{BOT_TOKEN}}';\nconst ADMIN_CHAT_ID = '5444227047';\nconst mode = 'lip_sync';\nlet errorMsg = 'Unknown API error';\nlet userId = 'unknown';\ntry {\n  const input = $input.first().json;\n  errorMsg = 'Code: ' + (input.code || 'N/A') + ', ' + (input.message || input.msg || JSON.stringify(input).substring(0, 300));\n} catch(e) { errorMsg = e.message; }\ntry { userId = $('Webhook').first().json.body.user_id || 'unknown'; } catch(e) {}\nconst text = '🔴 API Error: ' + mode + '\\nUser: ' + userId + '\\n' + errorMsg + '\\n\\nВозможно кредиты Kie.ai или сервер недоступен';\ntry {\n  await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {\n    method: 'POST', headers: {'Content-Type': 'application/json'},\n    body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, text: text })\n  });\n} catch(e) {}\nreturn $input.all();"
+      },
+      "name": "Error Logger API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        700
+      ],
+      "onError": "continueRegularOutput",
+      "id": "fde155b0-05ad-491f-b63f-bcfc6b7fa406"
+    },
+    {
+      "parameters": {
+        "jsCode": "const BOT_TOKEN = '{{BOT_TOKEN}}';\nconst ADMIN_CHAT_ID = '5444227047';\nconst mode = 'lip_sync';\nlet info = 'Generation failed';\nlet userId = 'unknown';\ntry {\n  const input = $input.first().json;\n  info = 'State: ' + (input.data?.state || input._poll_status || 'unknown') + ', Polls: ' + (input._poll_count || '?');\n} catch(e) { info = e.message; }\ntry { userId = $('Webhook').first().json.body.user_id || 'unknown'; } catch(e) {}\nconst text = '❌ Generation Failed: ' + mode + '\\nUser: ' + userId + '\\n' + info;\ntry {\n  await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {\n    method: 'POST', headers: {'Content-Type': 'application/json'},\n    body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, text: text })\n  });\n} catch(e) {}\nreturn $input.all();"
+      },
+      "name": "Error Logger Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4660,
+        700
+      ],
+      "onError": "continueRegularOutput",
+      "id": "f29df424-c364-407c-9815-5aa279244c07"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Telegram initData HMAC-SHA256 validation — pure JS (no crypto module needed)\nconst BOT_TOKEN = '{{BOT_TOKEN}}';\nconst MAX_AGE = 86400;\n\n// ---- Pure JS SHA-256 ----\nfunction _sha256(data) {\n  const K = [\n    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,\n    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,\n    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,\n    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,\n    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,\n    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,\n    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,\n    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2\n  ];\n  let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;\n  const m = Array.from(data), l = m.length * 8;\n  m.push(0x80);\n  while (m.length % 64 !== 56) m.push(0);\n  m.push(0,0,0,0,(l>>>24)&0xff,(l>>>16)&0xff,(l>>>8)&0xff,l&0xff);\n  for (let o = 0; o < m.length; o += 64) {\n    const W = [];\n    for (let i=0;i<16;i++) W[i]=(m[o+i*4]<<24)|(m[o+i*4+1]<<16)|(m[o+i*4+2]<<8)|m[o+i*4+3];\n    for (let i=16;i<64;i++){\n      const s0=((W[i-15]>>>7)|(W[i-15]<<25))^((W[i-15]>>>18)|(W[i-15]<<14))^(W[i-15]>>>3);\n      const s1=((W[i-2]>>>17)|(W[i-2]<<15))^((W[i-2]>>>19)|(W[i-2]<<13))^(W[i-2]>>>10);\n      W[i]=(W[i-16]+s0+W[i-7]+s1)|0;\n    }\n    let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;\n    for(let i=0;i<64;i++){\n      const S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));\n      const ch=(e&f)^(~e&g);\n      const t1=(h+S1+ch+K[i]+W[i])|0;\n      const S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));\n      const maj=(a&b)^(a&c)^(b&c);\n      const t2=(S0+maj)|0;\n      h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;\n    }\n    h0=(h0+a)|0;h1=(h1+b)|0;h2=(h2+c)|0;h3=(h3+d)|0;h4=(h4+e)|0;h5=(h5+f)|0;h6=(h6+g)|0;h7=(h7+h)|0;\n  }\n  const r=[];\n  for(const v of[h0,h1,h2,h3,h4,h5,h6,h7])r.push((v>>>24)&0xff,(v>>>16)&0xff,(v>>>8)&0xff,v&0xff);\n  return r;\n}\nfunction _hmac(keyB, msgB) {\n  let k = Array.from(keyB);\n  if(k.length>64) k=_sha256(k);\n  while(k.length<64) k.push(0);\n  const ip=k.map(b=>b^0x36), op=k.map(b=>b^0x5c);\n  return _sha256(op.concat(_sha256(ip.concat(Array.from(msgB)))));\n}\nfunction _s2b(s){const b=[];for(let i=0;i<s.length;i++){let c=s.charCodeAt(i);if(c<0x80){b.push(c);}else if(c<0x800){b.push(0xC0|(c>>6),0x80|(c&0x3F));}else if(c>=0xD800&&c<=0xDBFF){const h=c,l=s.charCodeAt(++i),p=((h-0xD800)<<10)+(l-0xDC00)+0x10000;b.push(0xF0|(p>>18),0x80|((p>>12)&0x3F),0x80|((p>>6)&0x3F),0x80|(p&0x3F));}else{b.push(0xE0|(c>>12),0x80|((c>>6)&0x3F),0x80|(c&0x3F));}}return b;}\nfunction _hex(bytes){return bytes.map(b=>b.toString(16).padStart(2,'0')).join('');}\n// ---- End SHA-256 ----\n\nconst body = ($input.first().json.body) || {};\nconst initData = body.init_data || '';\n\nif (!initData) {\n  return [{json: {...$input.first().json, _auth_valid: false}}];\n}\n\ntry {\n  // Parse URL query string\n  const params = {};\n  for (const pair of initData.split('&')) {\n    const idx = pair.indexOf('=');\n    if (idx === -1) continue;\n    params[decodeURIComponent(pair.slice(0, idx))] = decodeURIComponent(pair.slice(idx + 1));\n  }\n\n  if (!params.hash) throw new Error('no hash');\n  if (!params.auth_date) throw new Error('no auth_date');\n  if (!params.user) throw new Error('no user');\n\n  // Validate auth_date freshness\n  const authDate = Number(params.auth_date);\n  if (!authDate || authDate < 1000000000) throw new Error('invalid auth_date');\n  const age = Math.floor(Date.now() / 1000) - authDate;\n  if (age > MAX_AGE) throw new Error('expired');\n  if (age < -300) throw new Error('future auth_date');\n\n  // HMAC-SHA256 verification (pure JS)\n  const checkString = Object.keys(params).filter(k => k !== 'hash').sort().map(k => k + '=' + params[k]).join('\\n');\n  const secret = _hmac(_s2b('WebAppData'), _s2b(BOT_TOKEN));\n  const computed = _hex(_hmac(secret, _s2b(checkString)));\n  if (computed !== params.hash) throw new Error('bad hash');\n\n  // Validate user\n  let user = {};\n  try { user = JSON.parse(params.user); } catch(e) { throw new Error('invalid user json'); }\n  if (!user.id) throw new Error('no user.id');\n\n  const reqUserId = String(body.user_id || '');\n  if (reqUserId && String(user.id) !== reqUserId) {\n    throw new Error('user mismatch: ' + user.id + ' vs ' + reqUserId);\n  }\n\n  return [{json: {...$input.first().json, _auth_valid: true}}];\n} catch(e) {\n  console.error('initData validation failed:', e.message);\n  return [{json: {...$input.first().json, _auth_valid: false, _auth_error: e.message}}];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ],
+      "id": "validate-whdEwP3w",
+      "name": "Validate initData"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "auth-check",
+              "leftValue": "={{ $json._auth_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ],
+      "id": "auth-if-whdEwP3w",
+      "name": "Auth Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"error\": \"unauthorized\", \"message\": \"Invalid or missing Telegram initData\"}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        760,
+        80
+      ],
+      "id": "unauth-whdEwP3w",
+      "name": "Respond Unauthorized"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Upload photo and audio from base64 to S3\nconst body = $('Webhook').first().json.body;\nconst userId = body.user_id;\nconst timestamp = Date.now();\nconst randomStr = Math.random().toString(36).substring(2, 8);\n\nconst items = [];\n\n// --- Photo ---\nconst photoBase64 = body.photo_base64;\nconst photoUrl = body.image_url;\nconst photoMime = body.photo_mime_type || body.mime_type || 'image/jpeg';\n\nif (photoUrl) {\n  items.push({\n    json: { type: 'photo', url: photoUrl, needs_upload: false, s3_filename: null }\n  });\n} else if (photoBase64) {\n  const base64Clean = photoBase64.includes(',') ? photoBase64.split(',')[1] : photoBase64;\n  const ext = photoMime.includes('png') ? 'png' : 'jpg';\n  const s3Filename = 'uploads/' + timestamp + '_' + randomStr + '_photo.' + ext;\n  const s3Url = 'https://avatar-bot-generations.s3.twcstorage.ru/' + s3Filename;\n  const buffer = Buffer.from(base64Clean, 'base64');\n  const binary = await this.helpers.prepareBinaryData(buffer, 'photo.' + ext, photoMime);\n  items.push({\n    json: { type: 'photo', url: s3Url, needs_upload: true, s3_filename: s3Filename },\n    binary: { data: binary }\n  });\n} else {\n  throw new Error('No image_url or photo_base64');\n}\n\n// --- Audio ---\nconst audioBase64 = body.audio_base64;\nconst audioUrl = body.audio_url;\nconst audioMime = body.audio_mime_type || 'audio/mpeg';\nconst audioFileName = body.audio_file_name || 'audio.mp3';\n\nif (audioUrl) {\n  items.push({\n    json: { type: 'audio', url: audioUrl, needs_upload: false, s3_filename: null }\n  });\n} else if (audioBase64) {\n  const base64Clean = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;\n  const audioExt = audioMime.includes('ogg') ? 'ogg' : audioMime.includes('m4a') ? 'm4a' : 'mp3';\n  const s3Filename = 'uploads/' + timestamp + '_' + randomStr + '_audio.' + audioExt;\n  const s3Url = 'https://avatar-bot-generations.s3.twcstorage.ru/' + s3Filename;\n  const buffer = Buffer.from(base64Clean, 'base64');\n  const binary = await this.helpers.prepareBinaryData(buffer, audioFileName, audioMime);\n  items.push({\n    json: { type: 'audio', url: s3Url, needs_upload: true, s3_filename: s3Filename },\n    binary: { data: binary }\n  });\n} else {\n  throw new Error('No audio_url or audio_base64');\n}\n\nreturn items;\n"
+      },
+      "id": "upload-1771823178054-czsmdz",
+      "name": "Upload Photo + Audio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "=avatar-bot-generations",
+        "fileName": "={{ $json.s3_filename || \"uploads/temp.jpg\" }}",
+        "additionalFields": {
+          "acl": "public-read"
+        }
+      },
+      "id": "s3-1771823178054-hhlrcy",
+      "name": "S3 Upload",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        300
+      ],
+      "credentials": {
+        "s3": {
+          "id": "{{S3_CRED_ID}}",
+          "name": "Timeweb S3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect S3 URLs after upload - only pass needed fields\nconst uploadItems = $('Upload Photos').all();\nconst body = $('Webhook').first().json.body;\n\nconst result = {\n  user_id: body.user_id,\n  chat_id: body.chat_id,\n  initData: body.initData,\n  prompt: body.prompt || ''\n};\n\n// Collect uploaded URLs\nfor (const item of uploadItems) {\n  if (item.json.type === 'photo' || item.json.type === 'image') {\n    result.image_url = item.json.s3_url || item.json.image_url;\n  } else if (item.json.type === 'audio') {\n    result.audio_url = item.json.s3_url || item.json.audio_url;\n  }\n}\n\n// Fallback to body URLs\nif (!result.image_url) result.image_url = body.image_url;\nif (!result.audio_url) result.audio_url = body.audio_url;\n\nreturn [{ json: result }];"
+      },
+      "id": "collect-1771823178054-n1h9ta",
+      "name": "Collect URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        300
+      ]
+    },
+    {
+      "id": "310606d1-d1da-4779-855c-0b3fb1178867",
+      "name": "Calc Actual Cost",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7260,
+        500
+      ],
+      "parameters": {
+        "jsCode": "const userId = $('Parse Input').first().json.user_id;\nconst cost = $('Parse Input').first().json.cost;\nreturn [{json: { actual_cost: cost, ref_user_id: userId, ref_mode: 'lip_sync' }}];"
+      }
+    },
+    {
+      "id": "85203828-f9e1-42c7-b6aa-d1a7cc5d9727",
+      "name": "Was Paid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        7520,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-paid-1",
+              "leftValue": "={{ $json.actual_cost }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e9d96a44-f94f-4f1a-8bdc-5f54d88fcc18",
+      "name": "Apply Referral Commission",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        7780,
+        500
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=WITH commissions AS (\n  SELECT * FROM apply_referral_commission({{ $json.ref_user_id }}, {{ $json.actual_cost }}, '{{ $json.ref_mode }}')\n), ref_info AS (\n  SELECT username FROM users WHERE id = {{ $json.ref_user_id }}\n)\nSELECT c.parent_id, c.level, c.commission, COALESCE(r.username, '') AS ref_username\nFROM commissions c, ref_info r;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "930a22de-871e-45f9-8324-e688f19e2104",
+      "name": "Notify Referral Earnings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        8040,
+        500
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{BOT_TOKEN}}/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $json.parent_id }}"
+            },
+            {
+              "name": "text",
+              "value": "=💰 Реферальный доход!\nПартнёр {{ $json.level }}-го уровня{{ $json.ref_username ? ' (@' + $json.ref_username + ')' : '' }} воспользовался генерацией.\nНачислено: <b>+{{ $json.commission }} ⭐</b>"
+            },
+            {
+              "name": "parse_mode",
+              "value": "HTML"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate initData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "Check Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Balance": {
+      "main": [
+        [
+          {
+            "node": "Has Balance?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Balance?": {
+      "main": [
+        [
+          {
+            "node": "Upload Photo + Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond No Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduct Stars": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Result": {
+      "main": [
+        [
+          {
+            "node": "Is OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is OK?": {
+      "main": [
+        [
+          {
+            "node": "Get User Topic",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Error Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Generation": {
+      "main": [
+        [
+          {
+            "node": "Deduct Stars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Topic": {
+      "main": [
+        [
+          {
+            "node": "Prepare Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Topic": {
+      "main": [
+        [
+          {
+            "node": "Finalize Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Send": {
+      "main": [
+        [
+          {
+            "node": "Need Topic?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Topic": {
+      "main": [
+        [
+          {
+            "node": "Save Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Save Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Topic?": {
+      "main": [
+        [
+          {
+            "node": "Create Topic",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Send": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Kie Request": {
+      "main": [
+        [
+          {
+            "node": "Create Kie Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Kie Task": {
+      "main": [
+        [
+          {
+            "node": "Task Created?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Created?": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Error Logger API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Poll Kie Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Kie Status": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Poll": {
+      "main": [
+        [
+          {
+            "node": "Is Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Success?": {
+      "main": [
+        [
+          {
+            "node": "Check Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Failed?": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Error Logger Poll",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate initData": {
+      "main": [
+        [
+          {
+            "node": "Auth Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Valid?": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Photo + Audio": {
+      "main": [
+        [
+          {
+            "node": "S3 Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 Upload": {
+      "main": [
+        [
+          {
+            "node": "Collect URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect URLs": {
+      "main": [
+        [
+          {
+            "node": "Prepare Kie Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calc Actual Cost": {
+      "main": [
+        [
+          {
+            "node": "Was Paid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Was Paid?": {
+      "main": [
+        [
+          {
+            "node": "Apply Referral Commission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Referral Commission": {
+      "main": [
+        [
+          {
+            "node": "Notify Referral Earnings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond OK": {
+      "main": [
+        [
+          {
+            "node": "Calc Actual Cost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "6fdd156d-032e-47c4-b7e1-a3ee035a725d",
+  "versionCounter": 97,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-19T20:34:45.884Z",
+      "createdAt": "2026-02-19T20:34:45.884Z",
+      "role": "workflow:owner",
+      "workflowId": "whdEwP3wRDredCOw",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-25T18:10:05.041Z",
+    "createdAt": "2026-02-25T18:10:05.041Z",
+    "versionId": "6fdd156d-032e-47c4-b7e1-a3ee035a725d",
+    "workflowId": "whdEwP3wRDredCOw",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "generate-lip-sync",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          240,
+          300
+        ],
+        "webhookId": "generate-video",
+        "id": "c6813b1c-b512-47e7-b82d-acaece94e1d9",
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $('Webhook').first().json.body;\nreturn [{ json: {\n  user_id: body.user_id,\n  image_url: body.image_url,\n  audio_url: body.audio_url,\n  prompt: body.prompt || '',\n  init_data: body.init_data,\n    cost: 250,\n  mode: 'lip_sync'\n} }];"
+        },
+        "name": "Parse Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1020,
+          300
+        ],
+        "id": "216e77be-ead0-4bb2-8c48-4ecebdd7d1e6"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=SELECT id, star_balance FROM users WHERE id = {{ $json.user_id }}",
+          "options": {}
+        },
+        "name": "Check Balance",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1280,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "id": "124681c4-58ef-4fdd-9536-2a1a407d392a"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.star_balance }}",
+                "rightValue": "={{ $('Parse Input').first().json.cost }}",
+                "operator": {
+                  "type": "number",
+                  "operation": "gte"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Has Balance?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1540,
+          300
+        ],
+        "id": "5373a282-b913-4d12-ad17-df87d6ed81bf"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={\"error\": \"insufficient_balance\", \"required\": {{ $('Parse Input').first().json.cost }}, \"current\": {{ $json.star_balance }} }",
+          "options": {}
+        },
+        "name": "Respond No Balance",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          500
+        ],
+        "id": "b31666f0-5d7c-4f87-9902-c19912cca9d3"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=UPDATE users SET star_balance = star_balance - {{ $('Parse Input').first().json.cost }} WHERE id = {{ $('Parse Input').first().json.user_id }}",
+          "options": {}
+        },
+        "name": "Deduct Stars",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          7000,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "id": "a72af88f-c4a2-46dd-8aa1-7e5a8d45f243"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "{\"status\": \"ok\", \"sent\": true}",
+          "options": {}
+        },
+        "name": "Respond OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          7260,
+          200
+        ],
+        "id": "13d5769b-6fde-4b49-8f13-7bab44b9aa79"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={\"error\": \"generation_failed\", \"message\": \"AI generation failed. Please try again.\"}",
+          "options": {}
+        },
+        "name": "Respond Error",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          3100,
+          700
+        ],
+        "id": "eb277085-4b58-4b60-9272-ba6c21374162"
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.first().json;\nconst webhookData = $('Webhook').first().json.body;\n\nlet videoUrl = '';\ntry {\n  const rj = JSON.parse(data.data.resultJson);\n  videoUrl = rj.resultUrls?.[0] || '';\n} catch(e) {}\n\nif (!videoUrl) {\n  return [{json: {\n    status: 'error',\n    error_msg: 'No video in Kie.ai lip sync response: ' + JSON.stringify(data.data || {}).substring(0, 200),\n    user_id: webhookData.user_id\n  }}];\n}\n\nreturn [{json: {\n  status: 'ok',\n  video_url: videoUrl,\n  user_id: webhookData.user_id\n}}];"
+        },
+        "name": "Check Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4400,
+          200
+        ],
+        "id": "9963668a-b1fa-470a-a7fe-127317f732ec"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "status_check",
+                "leftValue": "={{ $json.status }}",
+                "rightValue": "ok",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Is OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          4660,
+          200
+        ],
+        "id": "6a0fcf9c-9ab9-4b43-b7e2-22917ea907e6"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=INSERT INTO generations (user_id, mode, result_type, result_url, prompt) VALUES ('{{ $(\"Webhook\").first().json.body.user_id }}', 'photo_to_video', 'video', '{{ $(\"Check Result\").first().json.video_url }}', '{{ $(\"Webhook\").first().json.body.prompt || '' }}')",
+          "options": {}
+        },
+        "name": "Save Generation",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          6740,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "id": "347aa6fa-41b2-40cf-9b24-93cf1e050ad4"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=SELECT thread_id FROM user_topics WHERE user_id = '{{ $(\"Webhook\").first().json.body.user_id }}' AND mode = 'photo_to_video'",
+          "options": {}
+        },
+        "name": "Get User Topic",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          4920,
+          200
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "id": "067af7bd-8cb3-40cf-85f4-5eff9d4a1916"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=INSERT INTO user_topics (user_id, mode, thread_id) VALUES ('{{ $(\"Prepare Send\").first().json.user_id }}', '{{ $(\"Prepare Send\").first().json.mode }}', {{ $(\"Create Topic\").first().json.result.message_thread_id || $(\"Prepare Send\").first().json.thread_id || 0 }}) ON CONFLICT (user_id, mode) DO UPDATE SET thread_id = EXCLUDED.thread_id",
+          "options": {}
+        },
+        "name": "Save Topic",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          5960,
+          400
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "continueOnFail": false,
+        "onError": "continueRegularOutput",
+        "id": "d5359f35-652e-44e7-8531-9d5107b33652"
+      },
+      {
+        "parameters": {
+          "jsCode": "const BOT_TOKEN = '{{BOT_TOKEN}}';\nconst ADMIN_CHAT_ID = '5444227047';\nconst mode = 'lip_sync';\nlet errorMsg = 'Unknown error';\nlet userId = 'unknown';\ntry {\n  const input = $input.first().json;\n  errorMsg = input.error_msg || input.error || input.detail || JSON.stringify(input).substring(0, 200);\n} catch(e) { errorMsg = 'Failed to parse error: ' + e.message; }\ntry { userId = $('Webhook').first().json.body.user_id || 'unknown'; } catch(e) {}\nconst text = '⚠️ Error in ' + mode + '\\nUser: ' + userId + '\\nError: ' + errorMsg;\ntry {\n  await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {\n    method: 'POST', headers: {'Content-Type': 'application/json'},\n    body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, text: text })\n  });\n} catch(e) {}\nreturn $input.all();"
+        },
+        "name": "Error Logger",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4920,
+          700
+        ],
+        "onError": "continueRegularOutput",
+        "id": "ea224f8e-8a6c-476c-b345-bd9e37beffe6"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Prepare data for Telegram HTTP Request nodes (no HTTP calls here)\nconst userId = $(\"Webhook\").first().json.body.user_id;\nconst mediaUrl = $(\"Check Result\").first().json.video_url;\nconst prompt = $(\"Webhook\").first().json.body.prompt || '';\nconst topicRows = $('Get User Topic').all();\nlet threadId = null;\nif (topicRows.length > 0 && topicRows[0].json.thread_id) {\n  threadId = topicRows[0].json.thread_id;\n}\n\nconst caption = '🎬 Видео' + (prompt ? '\\n\\n📝 Prompt: ' + prompt.substring(0, 800) : '');\n\n// Build send body\nconst sendBody = {\n  chat_id: String(userId),\n  video: mediaUrl,\n  caption: caption\n};\nif (threadId) sendBody.message_thread_id = threadId;\n\nreturn [{ json: {\n  user_id: String(userId),\n  mode: 'photo_to_video',\n  thread_id: threadId,\n  needs_topic: !threadId,\n  send_body: JSON.stringify(sendBody),\n  send_method: 'sendVideo',\n  icon_color: 16766590,\n  caption: caption,\n  media_url: mediaUrl\n} }];"
+        },
+        "name": "Prepare Send",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5180,
+          200
+        ],
+        "onError": "continueRegularOutput",
+        "id": "5d3f454b-291c-4fd7-b72f-fb97a9bbb36e"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot{{BOT_TOKEN}}/createForumTopic",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $json.user_id, name: $json.caption, icon_color: $json.icon_color }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "name": "Create Topic",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          5700,
+          400
+        ],
+        "executeOnce": true,
+        "continueOnFail": false,
+        "onError": "continueRegularOutput",
+        "id": "8fbb6404-2ed6-4c15-bead-c07a2432de6f"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot{{BOT_TOKEN}}/sendVideo",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "chat_id",
+                "value": "={{ $json.user_id }}"
+              },
+              {
+                "name": "video",
+                "value": "={{ $('Check Result').first().json.video_url }}"
+              },
+              {
+                "name": "caption",
+                "value": "={{ $json.caption }}"
+              },
+              {
+                "name": "message_thread_id",
+                "value": "={{ $json.thread_id }}"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "name": "Send to Telegram",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          6480,
+          200
+        ],
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 2000,
+        "continueOnFail": false,
+        "onError": "continueRegularOutput",
+        "id": "0898f012-8d7f-4b6b-9612-4ffe9117510d"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "needs_topic_check",
+                "leftValue": "={{ $json.needs_topic ? 1 : 0 }}",
+                "rightValue": 1,
+                "operator": {
+                  "type": "number",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Need Topic?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          5440,
+          200
+        ],
+        "id": "e4d7139b-5e45-4012-b7aa-d90396216c3c"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Pass through Prepare Send data with thread_id from newly created topic\nconst prepData = $(\"Prepare Send\").first().json;\nlet newThreadId = null;\ntry {\n  const createResult = $(\"Create Topic\").first().json;\n  newThreadId = createResult.result ? createResult.result.message_thread_id : null;\n} catch(e) {}\n\nreturn [{ json: {\n  ...prepData,\n  thread_id: newThreadId || prepData.thread_id\n} }];"
+        },
+        "name": "Finalize Send",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          6220,
+          400
+        ],
+        "onError": "continueRegularOutput",
+        "id": "dcd7b641-60f2-4e2d-b5cd-815f6e9ede22"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Prepare Kie.ai request (lip-sync)\nconst body = $('Parse Input').first().json;\n\n// Get URLs from Collect URLs node (S3 uploaded URLs), not from Parse Input\nconst collectData = $('Collect URLs').first().json;\nconst imageUrl = collectData.image_url || body.image_url;\nconst audioUrl = collectData.audio_url || body.audio_url;\n\nreturn [{ json: {\n  model: 'kling/ai-avatar-pro',\n  input: {\n    image_url: imageUrl,\n    audio_url: audioUrl,\n    prompt: body.prompt || ''\n  }\n} }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2580,
+          300
+        ],
+        "name": "Prepare Kie Request",
+        "id": "0ac2dfd0-f881-4991-9c13-ece97d787b29"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.kie.ai/api/v1/jobs/createTask",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer 3488c4a7497efbdaa035822971c57e0a"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2840,
+          300
+        ],
+        "name": "Create Kie Task",
+        "onError": "continueRegularOutput",
+        "id": "b8accb04-f367-4e26-a45b-11f61e85b1c0"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "tc-vid",
+                "leftValue": "={{ $json.code }}",
+                "rightValue": 200,
+                "operator": {
+                  "type": "number",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          3100,
+          300
+        ],
+        "name": "Task Created?",
+        "id": "baf6b0a2-18ad-4fcd-ac7c-6f92ef632e61"
+      },
+      {
+        "parameters": {
+          "amount": 15,
+          "unit": "seconds"
+        },
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          3360,
+          300
+        ],
+        "name": "Wait",
+        "webhookId": "385c2e9c-5708-4b98-a82f-3d3a24209805",
+        "id": "98d949e3-8a4c-44f3-af34-d607553ece2c"
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "=https://api.kie.ai/api/v1/jobs/recordInfo?taskId={{ $('Create Kie Task').first().json.data.taskId }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer 3488c4a7497efbdaa035822971c57e0a"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3620,
+          300
+        ],
+        "name": "Poll Kie Status",
+        "onError": "continueRegularOutput",
+        "id": "5e29d375-c7fd-4d3b-b26a-20bc0b260562"
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = items[0].json;\nconst state = data.data?.state || 'unknown';\nconst staticData = $getWorkflowStaticData('global');\nconst execId = $execution.id;\nconst key = 'poll_' + execId;\nstaticData[key] = (staticData[key] || 0) + 1;\nconst pollCount = staticData[key];\nconst MAX_POLLS = 24; // 24 x 15s = 6 min max (video takes longer)\n\nlet status = 'continue';\nif (state === 'success') status = 'success';\nelse if (state === 'fail' || pollCount >= MAX_POLLS) status = 'error';\n\nreturn [{ json: { ...data, _poll_status: status, _poll_count: pollCount } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3880,
+          300
+        ],
+        "name": "Evaluate Poll",
+        "id": "d75d0303-0f20-449c-9520-6f25cc97888b"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "is-vid",
+                "leftValue": "={{ $json._poll_status }}",
+                "rightValue": "success",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          4140,
+          300
+        ],
+        "name": "Is Success?",
+        "id": "c716f227-6b38-4ac9-8d73-6805bd4c61e2"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "if-vid",
+                "leftValue": "={{ $json._poll_status }}",
+                "rightValue": "error",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          4400,
+          400
+        ],
+        "name": "Is Failed?",
+        "id": "e6f4de82-12be-4596-af0b-6c5ed0174654",
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const BOT_TOKEN = '{{BOT_TOKEN}}';\nconst ADMIN_CHAT_ID = '5444227047';\nconst mode = 'lip_sync';\nlet errorMsg = 'Unknown API error';\nlet userId = 'unknown';\ntry {\n  const input = $input.first().json;\n  errorMsg = 'Code: ' + (input.code || 'N/A') + ', ' + (input.message || input.msg || JSON.stringify(input).substring(0, 300));\n} catch(e) { errorMsg = e.message; }\ntry { userId = $('Webhook').first().json.body.user_id || 'unknown'; } catch(e) {}\nconst text = '🔴 API Error: ' + mode + '\\nUser: ' + userId + '\\n' + errorMsg + '\\n\\nВозможно кредиты Kie.ai или сервер недоступен';\ntry {\n  await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {\n    method: 'POST', headers: {'Content-Type': 'application/json'},\n    body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, text: text })\n  });\n} catch(e) {}\nreturn $input.all();"
+        },
+        "name": "Error Logger API",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3360,
+          700
+        ],
+        "onError": "continueRegularOutput",
+        "id": "fde155b0-05ad-491f-b63f-bcfc6b7fa406"
+      },
+      {
+        "parameters": {
+          "jsCode": "const BOT_TOKEN = '{{BOT_TOKEN}}';\nconst ADMIN_CHAT_ID = '5444227047';\nconst mode = 'lip_sync';\nlet info = 'Generation failed';\nlet userId = 'unknown';\ntry {\n  const input = $input.first().json;\n  info = 'State: ' + (input.data?.state || input._poll_status || 'unknown') + ', Polls: ' + (input._poll_count || '?');\n} catch(e) { info = e.message; }\ntry { userId = $('Webhook').first().json.body.user_id || 'unknown'; } catch(e) {}\nconst text = '❌ Generation Failed: ' + mode + '\\nUser: ' + userId + '\\n' + info;\ntry {\n  await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {\n    method: 'POST', headers: {'Content-Type': 'application/json'},\n    body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, text: text })\n  });\n} catch(e) {}\nreturn $input.all();"
+        },
+        "name": "Error Logger Poll",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4660,
+          700
+        ],
+        "onError": "continueRegularOutput",
+        "id": "f29df424-c364-407c-9815-5aa279244c07"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Telegram initData HMAC-SHA256 validation — pure JS (no crypto module needed)\nconst BOT_TOKEN = '{{BOT_TOKEN}}';\nconst MAX_AGE = 86400;\n\n// ---- Pure JS SHA-256 ----\nfunction _sha256(data) {\n  const K = [\n    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,\n    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,\n    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,\n    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,\n    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,\n    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,\n    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,\n    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2\n  ];\n  let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;\n  const m = Array.from(data), l = m.length * 8;\n  m.push(0x80);\n  while (m.length % 64 !== 56) m.push(0);\n  m.push(0,0,0,0,(l>>>24)&0xff,(l>>>16)&0xff,(l>>>8)&0xff,l&0xff);\n  for (let o = 0; o < m.length; o += 64) {\n    const W = [];\n    for (let i=0;i<16;i++) W[i]=(m[o+i*4]<<24)|(m[o+i*4+1]<<16)|(m[o+i*4+2]<<8)|m[o+i*4+3];\n    for (let i=16;i<64;i++){\n      const s0=((W[i-15]>>>7)|(W[i-15]<<25))^((W[i-15]>>>18)|(W[i-15]<<14))^(W[i-15]>>>3);\n      const s1=((W[i-2]>>>17)|(W[i-2]<<15))^((W[i-2]>>>19)|(W[i-2]<<13))^(W[i-2]>>>10);\n      W[i]=(W[i-16]+s0+W[i-7]+s1)|0;\n    }\n    let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;\n    for(let i=0;i<64;i++){\n      const S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));\n      const ch=(e&f)^(~e&g);\n      const t1=(h+S1+ch+K[i]+W[i])|0;\n      const S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));\n      const maj=(a&b)^(a&c)^(b&c);\n      const t2=(S0+maj)|0;\n      h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;\n    }\n    h0=(h0+a)|0;h1=(h1+b)|0;h2=(h2+c)|0;h3=(h3+d)|0;h4=(h4+e)|0;h5=(h5+f)|0;h6=(h6+g)|0;h7=(h7+h)|0;\n  }\n  const r=[];\n  for(const v of[h0,h1,h2,h3,h4,h5,h6,h7])r.push((v>>>24)&0xff,(v>>>16)&0xff,(v>>>8)&0xff,v&0xff);\n  return r;\n}\nfunction _hmac(keyB, msgB) {\n  let k = Array.from(keyB);\n  if(k.length>64) k=_sha256(k);\n  while(k.length<64) k.push(0);\n  const ip=k.map(b=>b^0x36), op=k.map(b=>b^0x5c);\n  return _sha256(op.concat(_sha256(ip.concat(Array.from(msgB)))));\n}\nfunction _s2b(s){const b=[];for(let i=0;i<s.length;i++){let c=s.charCodeAt(i);if(c<0x80){b.push(c);}else if(c<0x800){b.push(0xC0|(c>>6),0x80|(c&0x3F));}else if(c>=0xD800&&c<=0xDBFF){const h=c,l=s.charCodeAt(++i),p=((h-0xD800)<<10)+(l-0xDC00)+0x10000;b.push(0xF0|(p>>18),0x80|((p>>12)&0x3F),0x80|((p>>6)&0x3F),0x80|(p&0x3F));}else{b.push(0xE0|(c>>12),0x80|((c>>6)&0x3F),0x80|(c&0x3F));}}return b;}\nfunction _hex(bytes){return bytes.map(b=>b.toString(16).padStart(2,'0')).join('');}\n// ---- End SHA-256 ----\n\nconst body = ($input.first().json.body) || {};\nconst initData = body.init_data || '';\n\nif (!initData) {\n  return [{json: {...$input.first().json, _auth_valid: false}}];\n}\n\ntry {\n  // Parse URL query string\n  const params = {};\n  for (const pair of initData.split('&')) {\n    const idx = pair.indexOf('=');\n    if (idx === -1) continue;\n    params[decodeURIComponent(pair.slice(0, idx))] = decodeURIComponent(pair.slice(idx + 1));\n  }\n\n  if (!params.hash) throw new Error('no hash');\n  if (!params.auth_date) throw new Error('no auth_date');\n  if (!params.user) throw new Error('no user');\n\n  // Validate auth_date freshness\n  const authDate = Number(params.auth_date);\n  if (!authDate || authDate < 1000000000) throw new Error('invalid auth_date');\n  const age = Math.floor(Date.now() / 1000) - authDate;\n  if (age > MAX_AGE) throw new Error('expired');\n  if (age < -300) throw new Error('future auth_date');\n\n  // HMAC-SHA256 verification (pure JS)\n  const checkString = Object.keys(params).filter(k => k !== 'hash').sort().map(k => k + '=' + params[k]).join('\\n');\n  const secret = _hmac(_s2b('WebAppData'), _s2b(BOT_TOKEN));\n  const computed = _hex(_hmac(secret, _s2b(checkString)));\n  if (computed !== params.hash) throw new Error('bad hash');\n\n  // Validate user\n  let user = {};\n  try { user = JSON.parse(params.user); } catch(e) { throw new Error('invalid user json'); }\n  if (!user.id) throw new Error('no user.id');\n\n  const reqUserId = String(body.user_id || '');\n  if (reqUserId && String(user.id) !== reqUserId) {\n    throw new Error('user mismatch: ' + user.id + ' vs ' + reqUserId);\n  }\n\n  return [{json: {...$input.first().json, _auth_valid: true}}];\n} catch(e) {\n  console.error('initData validation failed:', e.message);\n  return [{json: {...$input.first().json, _auth_valid: false, _auth_error: e.message}}];\n}"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          500,
+          300
+        ],
+        "id": "validate-whdEwP3w",
+        "name": "Validate initData"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "auth-check",
+                "leftValue": "={{ $json._auth_valid }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          760,
+          300
+        ],
+        "id": "auth-if-whdEwP3w",
+        "name": "Auth Valid?"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "{\"error\": \"unauthorized\", \"message\": \"Invalid or missing Telegram initData\"}",
+          "options": {
+            "responseCode": 403
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          80
+        ],
+        "id": "unauth-whdEwP3w",
+        "name": "Respond Unauthorized"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Upload photo and audio from base64 to S3\nconst body = $('Webhook').first().json.body;\nconst userId = body.user_id;\nconst timestamp = Date.now();\nconst randomStr = Math.random().toString(36).substring(2, 8);\n\nconst items = [];\n\n// --- Photo ---\nconst photoBase64 = body.photo_base64;\nconst photoUrl = body.image_url;\nconst photoMime = body.photo_mime_type || body.mime_type || 'image/jpeg';\n\nif (photoUrl) {\n  items.push({\n    json: { type: 'photo', url: photoUrl, needs_upload: false, s3_filename: null }\n  });\n} else if (photoBase64) {\n  const base64Clean = photoBase64.includes(',') ? photoBase64.split(',')[1] : photoBase64;\n  const ext = photoMime.includes('png') ? 'png' : 'jpg';\n  const s3Filename = 'uploads/' + timestamp + '_' + randomStr + '_photo.' + ext;\n  const s3Url = 'https://avatar-bot-generations.s3.twcstorage.ru/' + s3Filename;\n  const buffer = Buffer.from(base64Clean, 'base64');\n  const binary = await this.helpers.prepareBinaryData(buffer, 'photo.' + ext, photoMime);\n  items.push({\n    json: { type: 'photo', url: s3Url, needs_upload: true, s3_filename: s3Filename },\n    binary: { data: binary }\n  });\n} else {\n  throw new Error('No image_url or photo_base64');\n}\n\n// --- Audio ---\nconst audioBase64 = body.audio_base64;\nconst audioUrl = body.audio_url;\nconst audioMime = body.audio_mime_type || 'audio/mpeg';\nconst audioFileName = body.audio_file_name || 'audio.mp3';\n\nif (audioUrl) {\n  items.push({\n    json: { type: 'audio', url: audioUrl, needs_upload: false, s3_filename: null }\n  });\n} else if (audioBase64) {\n  const base64Clean = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;\n  const audioExt = audioMime.includes('ogg') ? 'ogg' : audioMime.includes('m4a') ? 'm4a' : 'mp3';\n  const s3Filename = 'uploads/' + timestamp + '_' + randomStr + '_audio.' + audioExt;\n  const s3Url = 'https://avatar-bot-generations.s3.twcstorage.ru/' + s3Filename;\n  const buffer = Buffer.from(base64Clean, 'base64');\n  const binary = await this.helpers.prepareBinaryData(buffer, audioFileName, audioMime);\n  items.push({\n    json: { type: 'audio', url: s3Url, needs_upload: true, s3_filename: s3Filename },\n    binary: { data: binary }\n  });\n} else {\n  throw new Error('No audio_url or audio_base64');\n}\n\nreturn items;\n"
+        },
+        "id": "upload-1771823178054-czsmdz",
+        "name": "Upload Photo + Audio",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1800,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "upload",
+          "bucketName": "=avatar-bot-generations",
+          "fileName": "={{ $json.s3_filename || \"uploads/temp.jpg\" }}",
+          "additionalFields": {
+            "acl": "public-read"
+          }
+        },
+        "id": "s3-1771823178054-hhlrcy",
+        "name": "S3 Upload",
+        "type": "n8n-nodes-base.s3",
+        "typeVersion": 1,
+        "position": [
+          2060,
+          300
+        ],
+        "credentials": {
+          "s3": {
+            "id": "{{S3_CRED_ID}}",
+            "name": "Timeweb S3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Collect S3 URLs after upload - only pass needed fields\nconst uploadItems = $('Upload Photos').all();\nconst body = $('Webhook').first().json.body;\n\nconst result = {\n  user_id: body.user_id,\n  chat_id: body.chat_id,\n  initData: body.initData,\n  prompt: body.prompt || ''\n};\n\n// Collect uploaded URLs\nfor (const item of uploadItems) {\n  if (item.json.type === 'photo' || item.json.type === 'image') {\n    result.image_url = item.json.s3_url || item.json.image_url;\n  } else if (item.json.type === 'audio') {\n    result.audio_url = item.json.s3_url || item.json.audio_url;\n  }\n}\n\n// Fallback to body URLs\nif (!result.image_url) result.image_url = body.image_url;\nif (!result.audio_url) result.audio_url = body.audio_url;\n\nreturn [{ json: result }];"
+        },
+        "id": "collect-1771823178054-n1h9ta",
+        "name": "Collect URLs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2320,
+          300
+        ]
+      },
+      {
+        "id": "310606d1-d1da-4779-855c-0b3fb1178867",
+        "name": "Calc Actual Cost",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          7260,
+          500
+        ],
+        "parameters": {
+          "jsCode": "const userId = $('Parse Input').first().json.user_id;\nconst cost = $('Parse Input').first().json.cost;\nreturn [{json: { actual_cost: cost, ref_user_id: userId, ref_mode: 'lip_sync' }}];"
+        }
+      },
+      {
+        "id": "85203828-f9e1-42c7-b6aa-d1a7cc5d9727",
+        "name": "Was Paid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          7520,
+          500
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "cond-paid-1",
+                "leftValue": "={{ $json.actual_cost }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "e9d96a44-f94f-4f1a-8bdc-5f54d88fcc18",
+        "name": "Apply Referral Commission",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          7780,
+          500
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=WITH commissions AS (\n  SELECT * FROM apply_referral_commission({{ $json.ref_user_id }}, {{ $json.actual_cost }}, '{{ $json.ref_mode }}')\n), ref_info AS (\n  SELECT username FROM users WHERE id = {{ $json.ref_user_id }}\n)\nSELECT c.parent_id, c.level, c.commission, COALESCE(r.username, '') AS ref_username\nFROM commissions c, ref_info r;",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "id": "930a22de-871e-45f9-8324-e688f19e2104",
+        "name": "Notify Referral Earnings",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          8040,
+          500
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot{{BOT_TOKEN}}/sendMessage",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "chat_id",
+                "value": "={{ $json.parent_id }}"
+              },
+              {
+                "name": "text",
+                "value": "=💰 Реферальный доход!\nПартнёр {{ $json.level }}-го уровня{{ $json.ref_username ? ' (@' + $json.ref_username + ')' : '' }} воспользовался генерацией.\nНачислено: <b>+{{ $json.commission }} ⭐</b>"
+              },
+              {
+                "name": "parse_mode",
+                "value": "HTML"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "continueOnFail": true
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate initData",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Input": {
+        "main": [
+          [
+            {
+              "node": "Check Balance",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Balance": {
+        "main": [
+          [
+            {
+              "node": "Has Balance?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Balance?": {
+        "main": [
+          [
+            {
+              "node": "Upload Photo + Audio",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond No Balance",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Deduct Stars": {
+        "main": [
+          [
+            {
+              "node": "Respond OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Result": {
+        "main": [
+          [
+            {
+              "node": "Is OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is OK?": {
+        "main": [
+          [
+            {
+              "node": "Get User Topic",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Error",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Error Logger",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Generation": {
+        "main": [
+          [
+            {
+              "node": "Deduct Stars",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get User Topic": {
+        "main": [
+          [
+            {
+              "node": "Prepare Send",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Topic": {
+        "main": [
+          [
+            {
+              "node": "Finalize Send",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Send": {
+        "main": [
+          [
+            {
+              "node": "Need Topic?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Topic": {
+        "main": [
+          [
+            {
+              "node": "Save Topic",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send to Telegram": {
+        "main": [
+          [
+            {
+              "node": "Save Generation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Need Topic?": {
+        "main": [
+          [
+            {
+              "node": "Create Topic",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send to Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Finalize Send": {
+        "main": [
+          [
+            {
+              "node": "Send to Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Kie Request": {
+        "main": [
+          [
+            {
+              "node": "Create Kie Task",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Kie Task": {
+        "main": [
+          [
+            {
+              "node": "Task Created?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Task Created?": {
+        "main": [
+          [
+            {
+              "node": "Wait",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Error",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Error Logger API",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait": {
+        "main": [
+          [
+            {
+              "node": "Poll Kie Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Poll Kie Status": {
+        "main": [
+          [
+            {
+              "node": "Evaluate Poll",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Evaluate Poll": {
+        "main": [
+          [
+            {
+              "node": "Is Success?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Success?": {
+        "main": [
+          [
+            {
+              "node": "Check Result",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Failed?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Failed?": {
+        "main": [
+          [
+            {
+              "node": "Respond Error",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Error Logger Poll",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Wait",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate initData": {
+        "main": [
+          [
+            {
+              "node": "Auth Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Auth Valid?": {
+        "main": [
+          [
+            {
+              "node": "Parse Input",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Unauthorized",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upload Photo + Audio": {
+        "main": [
+          [
+            {
+              "node": "S3 Upload",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "S3 Upload": {
+        "main": [
+          [
+            {
+              "node": "Collect URLs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Collect URLs": {
+        "main": [
+          [
+            {
+              "node": "Prepare Kie Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Calc Actual Cost": {
+        "main": [
+          [
+            {
+              "node": "Was Paid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Was Paid?": {
+        "main": [
+          [
+            {
+              "node": "Apply Referral Commission",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Apply Referral Commission": {
+        "main": [
+          [
+            {
+              "node": "Notify Referral Earnings",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond OK": {
+        "main": [
+          [
+            {
+              "node": "Calc Actual Cost",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-25T18:10:05.141Z",
+        "id": 2368,
+        "workflowId": "whdEwP3wRDredCOw",
+        "versionId": "6fdd156d-032e-47c4-b7e1-a3ee035a725d",
+        "event": "deactivated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      },
+      {
+        "createdAt": "2026-02-25T18:10:05.188Z",
+        "id": 2369,
+        "workflowId": "whdEwP3wRDredCOw",
+        "versionId": "6fdd156d-032e-47c4-b7e1-a3ee035a725d",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}

@@ -1,5 +1,37 @@
 # Лог действий — avatar-bot-miniapp
 
+## 2026-02-26
+
+### Turnkey-деплой пакет для перепродажи (avatar-bot-deploy/)
+
+Создан полный deployment-пакет для развёртывания системы на свежем Ubuntu VPS одной командой.
+
+**Новые файлы (16 файлов в avatar-bot-deploy/):**
+- `install.sh` — главный скрипт: установка Docker, Node.js, PM2, Nginx, SSL, PostgreSQL, n8n, импорт workflow, сборка фронтенда
+- `docker-compose.yml` — PostgreSQL 16 + n8n latest (порты только на localhost)
+- `config.env.example` — шаблон конфигурации для покупателя
+- `README.md` — полная инструкция по установке и управлению
+- `db/01_schema.sql` — основные таблицы (users, generations, payments, user_topics)
+- `db/02_referral.sql` — 5-уровневая реферальная система + PL/pgSQL функция
+- `db/03_monitoring.sql` — error_logs, health_checks, rate_log + views
+- `nginx/site.conf.template` — Nginx с плейсхолдерами, 3 location-блока, CSP для Telegram
+- `s3-upload-service/server.js` — параметризованный S3 микросервис (env vars вместо хардкода)
+- `s3-upload-service/package.json` + `ecosystem.config.js` — PM2 конфиг
+- `scripts/export_workflows.py` — экспорт ~23 workflow с текущего сервера + темплейтизация
+- `scripts/import_workflows.py` — импорт workflow на новый сервер + активация
+- `scripts/create_credentials.py` — создание PostgreSQL и S3 credentials в n8n через API
+- `scripts/setup_telegram.sh` — setWebhook, setMyDescription, setMyCommands, setChatMenuButton
+- `scripts/healthcheck.sh` — проверка всех компонентов (Docker, PG, n8n, webhook, S3, frontend, TG, Nginx, SSL)
+
+**Изменения в существующих файлах (параметризация бота):**
+- `src/App.jsx:144` — `those_are_the_gifts_bot` → `import.meta.env.VITE_BOT_USERNAME || 'those_are_the_gifts_bot'`
+- `src/components/ReferralScreen.jsx:33` — аналогично
+- `src/components/ResultScreen.jsx:32-35` — аналогично
+
+**Плейсхолдеры в workflow-шаблонах:**
+- `{{BOT_TOKEN}}`, `{{DOMAIN}}`, `{{MINIAPP_URL}}`, `{{BOT_USERNAME}}`
+- `{{POSTGRES_CRED_ID}}`, `{{S3_CRED_ID}}`, `{{ADMIN_PASSWORD}}`
+
 ## 2026-02-25
 
 ### Восстановление Code-нод в workflow generate-photosession (elqdZNPtVYlanzWW)
@@ -643,3 +675,87 @@ FROM commissions c, ref_info r;
 - **ID:** `9GTgFBEqi30M8fAR` (`[TEMP] Get function definition`)
 - Использовался для попытки запроса определения SQL-функции через webhook (не удался — 404)
 - Удалён за ненадобностью
+
+---
+
+## 2026-02-26
+
+### Dev-окружение: разделение prod и dev
+
+**Цель:** Разделить production и development, чтобы новые функции разрабатывались изолированно и выкатывались только когда готовы.
+
+**Архитектура:**
+- Prod: `VITE_API_BASE=https://n8n.creativeanalytic.ru/webhook` → `/webhook/<path>`
+- Dev: `VITE_API_BASE=https://n8n.creativeanalytic.ru/webhook/dev` → `/webhook/dev/<path>`
+- Vercel Production → prod webhooks, Vercel Preview (ветки) → dev webhooks
+- БД общая (PostgreSQL), тестирование через тестовый аккаунт
+
+### Создано 21 DEV-копий n8n workflows
+
+Скрипт `_non_project_files/create_dev_workflows.py` — batch-создание через n8n REST API. Каждая копия:
+- Имя с префиксом `[DEV]`
+- Webhook path с префиксом `dev/` (напр. `generate` → `dev/generate`)
+- Создана неактивной (активировать при разработке)
+
+**Генерационные (8):**
+
+| Prod Name | Dev ID | Dev Webhook Path |
+|---|---|---|
+| generate | `lmFaPpVFo6pHp0N9` | `dev/generate` |
+| generate-multi | `c0dAJP9f8AWRiRsN` | `dev/generate-multi` |
+| generate-style-transfer | `xfhdwCwBP3KZeQr3` | `dev/generate-style-transfer` |
+| generate-video | `j0Goh5OTRR2u2Q6q` | `dev/generate-video` |
+| Lip Sync | `BVNc3k8DJz2w9FbB` | `dev/generate-lip-sync` |
+| generate-remove-bg | `TIQQ1NlUiY2AWk3F` | `dev/generate-remove-bg` |
+| generate-enhance | `SVMZ4vpmniPuUYH2` | `dev/generate-enhance` |
+| generate-text-to-image | `7r0YrFjOHXmLvWVR` | `dev/generate-text-to-image` |
+
+**Вспомогательные (13):**
+
+| Prod Name | Dev ID | Dev Webhook Path |
+|---|---|---|
+| s3-upload | `6W1o2uxsEIxPLCpj` | `dev/s3-upload/upload-photo` |
+| user-status | `g4UpDxJ2nO2FtbPa` | `dev/user-status` |
+| create-invoice | `Pu1SpLlA2RTHwPAs` | `dev/create-invoice` |
+| user-generations | `VDFCxC2xYCGVKxqO` | `dev/user-generations` |
+| delete-generation | `xHI5xIuJn4cG0yTi` | `dev/delete-generation` |
+| payment-history | `m5pcMshKvjSjvfyN` | `dev/payment-history` |
+| referral-stats | `L3XEVZnWNlr0wJ5t` | `dev/referral-stats` |
+| admin-stats | `g62JqUqrpqplCBuR` | `dev/admin-stats` |
+| add-stars | `F5MGRA3iXQKgmWnb` | `dev/add-stars` |
+| block-user | `YjrCPl97OPevKxIN` | `dev/block-user` |
+| delete-user | `51kPH2m3gx4wNwUu` | `dev/delete-user` |
+| admin-broadcast-preview | `yGlvwBjQqVh8U3SU` | `dev/admin-broadcast-preview` |
+| admin-broadcast | `Y2VCZnaNpDFdUxbg` | `dev/admin-broadcast` |
+
+### Замена hardcoded S3 URL в api.js
+
+**Файл:** `src/utils/api.js`
+
+| Место | Было | Стало |
+|---|---|---|
+| `uploadToS3()` (строка ~135) | `https://n8n.creativeanalytic.ru/s3-upload/upload-photo` | `` `${API_BASE}/s3-upload/upload-photo` `` |
+| `uploadAudioToS3()` (строка ~515) | `https://n8n.creativeanalytic.ru/s3-upload/upload-photo` | `` `${API_BASE}/s3-upload/upload-photo` `` |
+
+Теперь S3 upload автоматически идёт на prod или dev webhook в зависимости от `VITE_API_BASE`.
+
+### Создан .env.development
+
+```
+VITE_API_BASE=https://n8n.creativeanalytic.ru/webhook/dev
+```
+
+Vite автоматически подхватывает при `npm run dev`.
+
+### Документация dev-окружения
+
+Создан файл `docs/DEV-WORKFLOW.md` — инструкция по работе с dev-окружением:
+- Архитектура (prod vs dev схема)
+- Переключение окружений через `VITE_API_BASE`
+- Workflow разработки (ветка → dev → тест → merge → перенос n8n)
+- Правила активации DEV workflows
+
+### Ручные шаги (не автоматизированы)
+
+- **Vercel Dashboard:** Установить `VITE_API_BASE` для Preview = `https://n8n.creativeanalytic.ru/webhook/dev`
+- **Telegram:** Создать тестового бота `@AvatarBot_dev` через @BotFather

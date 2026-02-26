@@ -1,0 +1,496 @@
+{
+  "name": "[MINIAPP] add-stars",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "add-stars",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "check_and_add",
+      "name": "Check and Add Stars",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst password = body.password;\nconst username = body.username || '';\nconst user_id = String(body.user_id || '').replace(/[^0-9]/g, '');\nconst amount = Math.floor(Number(body.amount));\n\nif (password !== '123hors456') {\n  return [{json: {error: 'access_denied', message: 'Invalid password'}}];\n}\n\nif (!user_id && !username) {\n  return [{json: {error: 'invalid_input', message: 'Username/user_id required'}}];\n}\n\nif (isNaN(amount) || amount === 0) {\n  return [{json: {error: 'invalid_input', message: 'Amount must be a positive integer'}}];\n}\n\nreturn [{json: {username, user_id, amount}}];"
+      }
+    },
+    {
+      "id": "add_stars",
+      "name": "Add Stars",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        650,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE users\nSET star_balance = COALESCE(star_balance, 0) + {{ $json.amount }},\n    blocked = FALSE\nWHERE id::text = '{{ $json.user_id }}'\nRETURNING id, username, star_balance, blocked;",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if the original Code node returned a password/validation error\nconst codeOutput = $('Check and Add Stars').first()?.json;\nif (codeOutput?.error) {\n  return [{ json: { db_error: true, error_message: codeOutput.message || String(codeOutput.error) } }];\n}\n\nconst items = $input.all();\n\n// Check for Postgres error\nif (items.length > 0 && items[0].json.error) {\n  const errObj = items[0].json.error;\n  const errMsg = typeof errObj === 'string' ? errObj : (errObj.message || errObj.description || JSON.stringify(errObj).substring(0, 200));\n  return [{ json: { db_error: true, error_message: errMsg } }];\n}\n\n// Check for empty result (user not found - UPDATE/DELETE returned 0 rows)\nif (!items || items.length === 0 || (items.length === 1 && !items[0].json.username && !items[0].json.id)) {\n  return [{ json: { db_error: true, error_message: \"not_found\" } }];\n}\n\n// Success\nreturn [{ json: { ...items[0].json, db_error: false } }];"
+      },
+      "id": "34bfbd27-8420-4fbb-b1b9-18edda9118b1",
+      "name": "Check Add Stars Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ff6e2012-eefe-43d0-8265-41630859325c",
+              "leftValue": "={{ $json.db_error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "92a60702-3f6f-47b8-a2e5-679b360689c9",
+      "name": "DB OK? (Add Stars)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1150,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error_message || \"operation_failed\", detail: $json.error_message }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "954aca76-98e6-4840-9623-ed1dc19961fc",
+      "name": "Respond Error (Add Stars)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1450,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  username: data.username || null,\n  star_balance: data.star_balance,\n  user_id: data.id\n} }];"
+      },
+      "id": "8ad26182-a731-4525-b5c4-644981cc5cca",
+      "name": "Build Stars Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "c79e79bb-7909-44ab-8fdb-c2e3199417a4",
+      "name": "Respond Success (Stars)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1750,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check and Add Stars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check and Add Stars": {
+      "main": [
+        [
+          {
+            "node": "Add Stars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Stars": {
+      "main": [
+        [
+          {
+            "node": "Check Add Stars Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Add Stars Result": {
+      "main": [
+        [
+          {
+            "node": "DB OK? (Add Stars)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB OK? (Add Stars)": {
+      "main": [
+        [
+          {
+            "node": "Build Stars Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error (Add Stars)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Stars Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success (Stars)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "734f8946-1241-436d-8e7d-6ca4cbb0c879",
+  "versionCounter": 70,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-12T14:22:06.925Z",
+      "createdAt": "2026-02-12T14:22:06.925Z",
+      "role": "workflow:owner",
+      "workflowId": "Q4ND53LV9pUdviP5",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-24T04:03:05.470Z",
+    "createdAt": "2026-02-24T04:03:05.470Z",
+    "versionId": "734f8946-1241-436d-8e7d-6ca4cbb0c879",
+    "workflowId": "Q4ND53LV9pUdviP5",
+    "nodes": [
+      {
+        "id": "webhook",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          250,
+          300
+        ],
+        "webhookId": "add-stars",
+        "parameters": {
+          "path": "add-stars",
+          "httpMethod": "POST",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "check_and_add",
+        "name": "Check and Add Stars",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          450,
+          300
+        ],
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst password = body.password;\nconst username = body.username || '';\nconst user_id = String(body.user_id || '').replace(/[^0-9]/g, '');\nconst amount = Math.floor(Number(body.amount));\n\nif (password !== '123hors456') {\n  return [{json: {error: 'access_denied', message: 'Invalid password'}}];\n}\n\nif (!user_id && !username) {\n  return [{json: {error: 'invalid_input', message: 'Username/user_id required'}}];\n}\n\nif (isNaN(amount) || amount === 0) {\n  return [{json: {error: 'invalid_input', message: 'Amount must be a positive integer'}}];\n}\n\nreturn [{json: {username, user_id, amount}}];"
+        }
+      },
+      {
+        "id": "add_stars",
+        "name": "Add Stars",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          650,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=UPDATE users\nSET star_balance = COALESCE(star_balance, 0) + {{ $json.amount }},\n    blocked = FALSE\nWHERE id::text = '{{ $json.user_id }}'\nRETURNING id, username, star_balance, blocked;",
+          "options": {}
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Check if the original Code node returned a password/validation error\nconst codeOutput = $('Check and Add Stars').first()?.json;\nif (codeOutput?.error) {\n  return [{ json: { db_error: true, error_message: codeOutput.message || String(codeOutput.error) } }];\n}\n\nconst items = $input.all();\n\n// Check for Postgres error\nif (items.length > 0 && items[0].json.error) {\n  const errObj = items[0].json.error;\n  const errMsg = typeof errObj === 'string' ? errObj : (errObj.message || errObj.description || JSON.stringify(errObj).substring(0, 200));\n  return [{ json: { db_error: true, error_message: errMsg } }];\n}\n\n// Check for empty result (user not found - UPDATE/DELETE returned 0 rows)\nif (!items || items.length === 0 || (items.length === 1 && !items[0].json.username && !items[0].json.id)) {\n  return [{ json: { db_error: true, error_message: \"not_found\" } }];\n}\n\n// Success\nreturn [{ json: { ...items[0].json, db_error: false } }];"
+        },
+        "id": "34bfbd27-8420-4fbb-b1b9-18edda9118b1",
+        "name": "Check Add Stars Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          900,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "ff6e2012-eefe-43d0-8265-41630859325c",
+                "leftValue": "={{ $json.db_error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "false"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "92a60702-3f6f-47b8-a2e5-679b360689c9",
+        "name": "DB OK? (Add Stars)",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1150,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: $json.error_message || \"operation_failed\", detail: $json.error_message }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "954aca76-98e6-4840-9623-ed1dc19961fc",
+        "name": "Respond Error (Add Stars)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1450,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  username: data.username || null,\n  star_balance: data.star_balance,\n  user_id: data.id\n} }];"
+        },
+        "id": "8ad26182-a731-4525-b5c4-644981cc5cca",
+        "name": "Build Stars Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1450,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}"
+        },
+        "id": "c79e79bb-7909-44ab-8fdb-c2e3199417a4",
+        "name": "Respond Success (Stars)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1750,
+          200
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Check and Add Stars",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check and Add Stars": {
+        "main": [
+          [
+            {
+              "node": "Add Stars",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Add Stars": {
+        "main": [
+          [
+            {
+              "node": "Check Add Stars Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Add Stars Result": {
+        "main": [
+          [
+            {
+              "node": "DB OK? (Add Stars)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "DB OK? (Add Stars)": {
+        "main": [
+          [
+            {
+              "node": "Build Stars Response",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Error (Add Stars)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Stars Response": {
+        "main": [
+          [
+            {
+              "node": "Respond Success (Stars)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T04:03:05.508Z",
+        "id": 2144,
+        "workflowId": "Q4ND53LV9pUdviP5",
+        "versionId": "734f8946-1241-436d-8e7d-6ca4cbb0c879",
+        "event": "deactivated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      },
+      {
+        "createdAt": "2026-02-24T04:03:05.523Z",
+        "id": 2145,
+        "workflowId": "Q4ND53LV9pUdviP5",
+        "versionId": "734f8946-1241-436d-8e7d-6ca4cbb0c879",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}

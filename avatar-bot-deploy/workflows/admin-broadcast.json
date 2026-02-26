@@ -1,0 +1,1176 @@
+{
+  "name": "[MINIAPP] admin-broadcast",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "wh-bc",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "admin-broadcast",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "validate-bc",
+      "name": "Validate & Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst body = $json.body || $json;\n\n// Проверка пароля\nif (body.password !== '123hors456') {\n  return [{json: {\n    error: 'access_denied',\n    message: 'Invalid password',\n    mode: 'error'\n  }}];\n}\n\n// Парсинг входных данных\nconst messageText = (body.message_text || '').trim();\nif (!messageText) {\n  return [{json: {\n    error: 'invalid_input',\n    message: 'message_text is required',\n    mode: 'error'\n  }}];\n}\n\nconst photoUrl = body.photo_url || null;\nlet buttons = body.buttons || [];\nif (typeof buttons === 'string') {\n  try { buttons = JSON.parse(buttons); } catch(e) { buttons = []; }\n}\nbuttons = buttons.slice(0, 3); // макс 3 кнопки\n\nconst filterType = body.filter_type || 'all';\nconst testUserId = body.test_user_id || null;\nconst scheduleAt = body.schedule_at || null;\n\n// Определяем режим\nlet mode = 'send';\nif (testUserId) mode = 'test';\nelse if (scheduleAt) mode = 'schedule';\n\n// WHERE-клауза для фильтра получателей\nlet filterClause = '';\nswitch (filterType) {\n  case 'has_balance':\n    filterClause = 'AND star_balance > 0'; break;\n  case 'zero_balance':\n    filterClause = 'AND star_balance = 0'; break;\n  case 'new_7d':\n    filterClause = \"AND created_at > NOW() - INTERVAL '7 days'\"; break;\n  case 'new_24h':\n    filterClause = \"AND created_at > NOW() - INTERVAL '24 hours'\"; break;\n}\n\n// Формируем reply_markup для кнопок (Telegram InlineKeyboard)\nlet replyMarkup = null;\nif (buttons.length > 0) {\n  replyMarkup = {\n    inline_keyboard: buttons.map(btn => [{text: btn.text, url: btn.url}])\n  };\n}\n\nreturn [{json: {\n  mode,\n  message_text: messageText,\n  photo_url: photoUrl,\n  buttons,\n  reply_markup: replyMarkup,\n  filter_type: filterType,\n  filter_clause: filterClause,\n  test_user_id: testUserId,\n  schedule_at: scheduleAt,\n}}];\n"
+      }
+    },
+    {
+      "id": "if-err-bc",
+      "name": "Has Error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        730,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c-err-bc",
+              "leftValue": "={{ $json.mode }}",
+              "rightValue": "error",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-err-bc",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        460
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({error: $json.error, message: $json.message}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "if-test-bc",
+      "name": "Is Test?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c-test",
+              "leftValue": "={{ $json.mode }}",
+              "rightValue": "test",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "prep-test-bc",
+      "name": "Prepare Test Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        100
+      ],
+      "parameters": {
+        "jsCode": "\nconst validated = $('Validate & Route').first().json;\nconst chatId = validated.test_user_id;\nconst botToken = '{{BOT_TOKEN}}';\nconst baseUrl = `https://api.telegram.org/bot${botToken}`;\n\nlet apiMethod, requestBody;\n\nif (validated.photo_url) {\n  apiMethod = 'sendPhoto';\n  requestBody = {\n    chat_id: chatId,\n    photo: validated.photo_url,\n    caption: validated.message_text,\n    parse_mode: 'HTML',\n  };\n} else {\n  apiMethod = 'sendMessage';\n  requestBody = {\n    chat_id: chatId,\n    text: validated.message_text,\n    parse_mode: 'HTML',\n  };\n}\n\nif (validated.reply_markup) {\n  requestBody.reply_markup = JSON.stringify(validated.reply_markup);\n}\n\nreturn [{json: {\n  chat_id: chatId,\n  api_url: `${baseUrl}/${apiMethod}`,\n  request_body: requestBody,\n}}];\n"
+      }
+    },
+    {
+      "id": "send-test-bc",
+      "name": "Send Test",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.api_url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request_body) }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "respond-test-bc",
+      "name": "Respond Test OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({status: \"test_sent\", ok: $json.ok || false, chat_id: $json.result ? $json.result.chat.id : null}) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "if-sched-bc",
+      "name": "Is Schedule?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c-sched",
+              "leftValue": "={{ $('Validate & Route').first().json.mode }}",
+              "rightValue": "schedule",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "prep-sched-bc",
+      "name": "Prepare Schedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        250
+      ],
+      "parameters": {
+        "jsCode": "\nconst v = $('Validate & Route').first().json;\nreturn [{json: {\n  message_text: v.message_text,\n  photo_url: v.photo_url || null,\n  buttons: JSON.stringify(v.buttons || []),\n  filter_type: v.filter_type,\n  scheduled_at: v.schedule_at,\n  status: 'scheduled',\n}}];\n"
+      }
+    },
+    {
+      "id": "save-sched-bc",
+      "name": "Save Broadcast",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1680,
+        250
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO broadcasts (message_text, photo_url, buttons, filter_type, scheduled_at, status)\nVALUES (\n  '{{ $json.message_text }}',\n  {{ $json.photo_url ? \"'\" + $json.photo_url + \"'\" : 'NULL' }},\n  '{{ $json.buttons }}'::jsonb,\n  '{{ $json.filter_type }}',\n  '{{ $json.scheduled_at }}'::timestamp,\n  'scheduled'\n) RETURNING id, status, scheduled_at;",
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-sched-bc",
+      "name": "Respond Schedule OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        250
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({status: \"scheduled\", broadcast_id: $json.id, scheduled_at: $json.scheduled_at}) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "get-users-bc",
+      "name": "Get Recipients",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1440,
+        460
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT id FROM users WHERE blocked = false {{ $('Validate & Route').first().json.filter_clause }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "prep-msgs-bc",
+      "name": "Prepare Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        460
+      ],
+      "parameters": {
+        "jsCode": "\nconst validated = $('Validate & Route').first().json;\nconst users = $input.all().map(item => item.json);\n\nconst botToken = '{{BOT_TOKEN}}';\nconst baseUrl = `https://api.telegram.org/bot${botToken}`;\n\nconst items = [];\n\nfor (const user of users) {\n  const chatId = user.id;\n  if (!chatId) continue;\n\n  let apiMethod, requestBody;\n\n  if (validated.photo_url) {\n    apiMethod = 'sendPhoto';\n    requestBody = {\n      chat_id: chatId,\n      photo: validated.photo_url,\n      caption: validated.message_text,\n      parse_mode: 'HTML',\n    };\n  } else {\n    apiMethod = 'sendMessage';\n    requestBody = {\n      chat_id: chatId,\n      text: validated.message_text,\n      parse_mode: 'HTML',\n    };\n  }\n\n  if (validated.reply_markup) {\n    requestBody.reply_markup = JSON.stringify(validated.reply_markup);\n  }\n\n  items.push({json: {\n    chat_id: chatId,\n    api_url: `${baseUrl}/${apiMethod}`,\n    request_body: requestBody,\n  }});\n}\n\n// Если массив пуст — вернём placeholder, чтобы цепочка не оборвалась\nif (items.length === 0) {\n  return [{json: {chat_id: null, api_url: '', request_body: {}, _empty: true}}];\n}\n\nreturn items;\n"
+      }
+    },
+    {
+      "id": "split-bc",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1920,
+        460
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "send-tg-bc",
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        560
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.api_url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request_body) }}",
+        "options": {
+          "timeout": 10000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 40
+            }
+          }
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "wait-bc",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        560
+      ],
+      "parameters": {
+        "amount": 40,
+        "unit": "milliseconds"
+      }
+    },
+    {
+      "id": "stats-bc",
+      "name": "Collect Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        340
+      ],
+      "parameters": {
+        "jsCode": "\n// Собираем все результаты из SplitInBatches\nconst allItems = $input.all();\nlet sent = 0;\nlet failed = 0;\nlet blocked = 0;\n\nfor (const item of allItems) {\n  const d = item.json;\n\n  // Пустой placeholder (0 получателей)\n  if (d._empty) continue;\n\n  // Если HTTP Request вернул ok=true — успешно\n  if (d.ok === true) {\n    sent++;\n  } else {\n    // Проверяем error_code: 403 = бот заблокирован пользователем\n    if (d.error_code === 403) {\n      blocked++;\n    } else {\n      failed++;\n    }\n  }\n}\n\nreturn [{json: {\n  status: 'completed',\n  sent_count: sent,\n  failed_count: failed,\n  blocked_count: blocked,\n  total: sent + failed + blocked,\n}}];\n"
+      }
+    },
+    {
+      "id": "respond-bc-ok",
+      "name": "Respond Broadcast OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        340
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Route": {
+      "main": [
+        [
+          {
+            "node": "Has Error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Error?": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Test?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Test?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Test Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Schedule?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Test Message": {
+      "main": [
+        [
+          {
+            "node": "Send Test",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Test": {
+      "main": [
+        [
+          {
+            "node": "Respond Test OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Schedule?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Schedule": {
+      "main": [
+        [
+          {
+            "node": "Save Broadcast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Broadcast": {
+      "main": [
+        [
+          {
+            "node": "Respond Schedule OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recipients": {
+      "main": [
+        [
+          {
+            "node": "Prepare Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Messages": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Stats": {
+      "main": [
+        [
+          {
+            "node": "Respond Broadcast OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "e7f39a06-a84d-4ee2-bcaa-59bb1fea6725",
+  "versionCounter": 11,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-20T22:48:13.698Z",
+      "createdAt": "2026-02-20T22:48:13.698Z",
+      "role": "workflow:owner",
+      "workflowId": "1ItmJTcUOGYnyfsE",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-24T04:03:10.478Z",
+    "createdAt": "2026-02-24T04:03:10.478Z",
+    "versionId": "e7f39a06-a84d-4ee2-bcaa-59bb1fea6725",
+    "workflowId": "1ItmJTcUOGYnyfsE",
+    "nodes": [
+      {
+        "id": "wh-bc",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          250,
+          300
+        ],
+        "webhookId": "admin-broadcast",
+        "parameters": {
+          "path": "admin-broadcast",
+          "httpMethod": "POST",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "validate-bc",
+        "name": "Validate & Route",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          500,
+          300
+        ],
+        "parameters": {
+          "jsCode": "\nconst body = $json.body || $json;\n\n// Проверка пароля\nif (body.password !== '123hors456') {\n  return [{json: {\n    error: 'access_denied',\n    message: 'Invalid password',\n    mode: 'error'\n  }}];\n}\n\n// Парсинг входных данных\nconst messageText = (body.message_text || '').trim();\nif (!messageText) {\n  return [{json: {\n    error: 'invalid_input',\n    message: 'message_text is required',\n    mode: 'error'\n  }}];\n}\n\nconst photoUrl = body.photo_url || null;\nlet buttons = body.buttons || [];\nif (typeof buttons === 'string') {\n  try { buttons = JSON.parse(buttons); } catch(e) { buttons = []; }\n}\nbuttons = buttons.slice(0, 3); // макс 3 кнопки\n\nconst filterType = body.filter_type || 'all';\nconst testUserId = body.test_user_id || null;\nconst scheduleAt = body.schedule_at || null;\n\n// Определяем режим\nlet mode = 'send';\nif (testUserId) mode = 'test';\nelse if (scheduleAt) mode = 'schedule';\n\n// WHERE-клауза для фильтра получателей\nlet filterClause = '';\nswitch (filterType) {\n  case 'has_balance':\n    filterClause = 'AND star_balance > 0'; break;\n  case 'zero_balance':\n    filterClause = 'AND star_balance = 0'; break;\n  case 'new_7d':\n    filterClause = \"AND created_at > NOW() - INTERVAL '7 days'\"; break;\n  case 'new_24h':\n    filterClause = \"AND created_at > NOW() - INTERVAL '24 hours'\"; break;\n}\n\n// Формируем reply_markup для кнопок (Telegram InlineKeyboard)\nlet replyMarkup = null;\nif (buttons.length > 0) {\n  replyMarkup = {\n    inline_keyboard: buttons.map(btn => [{text: btn.text, url: btn.url}])\n  };\n}\n\nreturn [{json: {\n  mode,\n  message_text: messageText,\n  photo_url: photoUrl,\n  buttons,\n  reply_markup: replyMarkup,\n  filter_type: filterType,\n  filter_clause: filterClause,\n  test_user_id: testUserId,\n  schedule_at: scheduleAt,\n}}];\n"
+        }
+      },
+      {
+        "id": "if-err-bc",
+        "name": "Has Error?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          730,
+          300
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "c-err-bc",
+                "leftValue": "={{ $json.mode }}",
+                "rightValue": "error",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "respond-err-bc",
+        "name": "Respond Error",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          960,
+          460
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({error: $json.error, message: $json.message}) }}",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      },
+      {
+        "id": "if-test-bc",
+        "name": "Is Test?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          960,
+          200
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "c-test",
+                "leftValue": "={{ $json.mode }}",
+                "rightValue": "test",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "prep-test-bc",
+        "name": "Prepare Test Message",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          100
+        ],
+        "parameters": {
+          "jsCode": "\nconst validated = $('Validate & Route').first().json;\nconst chatId = validated.test_user_id;\nconst botToken = '{{BOT_TOKEN}}';\nconst baseUrl = `https://api.telegram.org/bot${botToken}`;\n\nlet apiMethod, requestBody;\n\nif (validated.photo_url) {\n  apiMethod = 'sendPhoto';\n  requestBody = {\n    chat_id: chatId,\n    photo: validated.photo_url,\n    caption: validated.message_text,\n    parse_mode: 'HTML',\n  };\n} else {\n  apiMethod = 'sendMessage';\n  requestBody = {\n    chat_id: chatId,\n    text: validated.message_text,\n    parse_mode: 'HTML',\n  };\n}\n\nif (validated.reply_markup) {\n  requestBody.reply_markup = JSON.stringify(validated.reply_markup);\n}\n\nreturn [{json: {\n  chat_id: chatId,\n  api_url: `${baseUrl}/${apiMethod}`,\n  request_body: requestBody,\n}}];\n"
+        }
+      },
+      {
+        "id": "send-test-bc",
+        "name": "Send Test",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1440,
+          100
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.api_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.request_body) }}",
+          "options": {
+            "timeout": 10000
+          }
+        }
+      },
+      {
+        "id": "respond-test-bc",
+        "name": "Respond Test OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1680,
+          100
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({status: \"test_sent\", ok: $json.ok || false, chat_id: $json.result ? $json.result.chat.id : null}) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "if-sched-bc",
+        "name": "Is Schedule?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1200,
+          300
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "c-sched",
+                "leftValue": "={{ $('Validate & Route').first().json.mode }}",
+                "rightValue": "schedule",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "prep-sched-bc",
+        "name": "Prepare Schedule",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          250
+        ],
+        "parameters": {
+          "jsCode": "\nconst v = $('Validate & Route').first().json;\nreturn [{json: {\n  message_text: v.message_text,\n  photo_url: v.photo_url || null,\n  buttons: JSON.stringify(v.buttons || []),\n  filter_type: v.filter_type,\n  scheduled_at: v.schedule_at,\n  status: 'scheduled',\n}}];\n"
+        }
+      },
+      {
+        "id": "save-sched-bc",
+        "name": "Save Broadcast",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1680,
+          250
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=INSERT INTO broadcasts (message_text, photo_url, buttons, filter_type, scheduled_at, status)\nVALUES (\n  '{{ $json.message_text }}',\n  {{ $json.photo_url ? \"'\" + $json.photo_url + \"'\" : 'NULL' }},\n  '{{ $json.buttons }}'::jsonb,\n  '{{ $json.filter_type }}',\n  '{{ $json.scheduled_at }}'::timestamp,\n  'scheduled'\n) RETURNING id, status, scheduled_at;",
+          "options": {}
+        }
+      },
+      {
+        "id": "respond-sched-bc",
+        "name": "Respond Schedule OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1920,
+          250
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({status: \"scheduled\", broadcast_id: $json.id, scheduled_at: $json.scheduled_at}) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "get-users-bc",
+        "name": "Get Recipients",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1440,
+          460
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=SELECT id FROM users WHERE blocked = false {{ $('Validate & Route').first().json.filter_clause }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "prep-msgs-bc",
+        "name": "Prepare Messages",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1680,
+          460
+        ],
+        "parameters": {
+          "jsCode": "\nconst validated = $('Validate & Route').first().json;\nconst users = $input.all().map(item => item.json);\n\nconst botToken = '{{BOT_TOKEN}}';\nconst baseUrl = `https://api.telegram.org/bot${botToken}`;\n\nconst items = [];\n\nfor (const user of users) {\n  const chatId = user.id;\n  if (!chatId) continue;\n\n  let apiMethod, requestBody;\n\n  if (validated.photo_url) {\n    apiMethod = 'sendPhoto';\n    requestBody = {\n      chat_id: chatId,\n      photo: validated.photo_url,\n      caption: validated.message_text,\n      parse_mode: 'HTML',\n    };\n  } else {\n    apiMethod = 'sendMessage';\n    requestBody = {\n      chat_id: chatId,\n      text: validated.message_text,\n      parse_mode: 'HTML',\n    };\n  }\n\n  if (validated.reply_markup) {\n    requestBody.reply_markup = JSON.stringify(validated.reply_markup);\n  }\n\n  items.push({json: {\n    chat_id: chatId,\n    api_url: `${baseUrl}/${apiMethod}`,\n    request_body: requestBody,\n  }});\n}\n\n// Если массив пуст — вернём placeholder, чтобы цепочка не оборвалась\nif (items.length === 0) {\n  return [{json: {chat_id: null, api_url: '', request_body: {}, _empty: true}}];\n}\n\nreturn items;\n"
+        }
+      },
+      {
+        "id": "split-bc",
+        "name": "Split In Batches",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          1920,
+          460
+        ],
+        "parameters": {
+          "batchSize": 1,
+          "options": {}
+        }
+      },
+      {
+        "id": "send-tg-bc",
+        "name": "Send Telegram",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2160,
+          560
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.api_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.request_body) }}",
+          "options": {
+            "timeout": 10000,
+            "batching": {
+              "batch": {
+                "batchSize": 1,
+                "batchInterval": 40
+              }
+            }
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "id": "wait-bc",
+        "name": "Wait",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          2400,
+          560
+        ],
+        "parameters": {
+          "amount": 40,
+          "unit": "milliseconds"
+        }
+      },
+      {
+        "id": "stats-bc",
+        "name": "Collect Stats",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2160,
+          340
+        ],
+        "parameters": {
+          "jsCode": "\n// Собираем все результаты из SplitInBatches\nconst allItems = $input.all();\nlet sent = 0;\nlet failed = 0;\nlet blocked = 0;\n\nfor (const item of allItems) {\n  const d = item.json;\n\n  // Пустой placeholder (0 получателей)\n  if (d._empty) continue;\n\n  // Если HTTP Request вернул ok=true — успешно\n  if (d.ok === true) {\n    sent++;\n  } else {\n    // Проверяем error_code: 403 = бот заблокирован пользователем\n    if (d.error_code === 403) {\n      blocked++;\n    } else {\n      failed++;\n    }\n  }\n}\n\nreturn [{json: {\n  status: 'completed',\n  sent_count: sent,\n  failed_count: failed,\n  blocked_count: blocked,\n  total: sent + failed + blocked,\n}}];\n"
+        }
+      },
+      {
+        "id": "respond-bc-ok",
+        "name": "Respond Broadcast OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          2400,
+          340
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json }}",
+          "options": {}
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate & Route",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate & Route": {
+        "main": [
+          [
+            {
+              "node": "Has Error?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Error?": {
+        "main": [
+          [
+            {
+              "node": "Respond Error",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Test?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Test?": {
+        "main": [
+          [
+            {
+              "node": "Prepare Test Message",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Schedule?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Test Message": {
+        "main": [
+          [
+            {
+              "node": "Send Test",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Test": {
+        "main": [
+          [
+            {
+              "node": "Respond Test OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Schedule?": {
+        "main": [
+          [
+            {
+              "node": "Prepare Schedule",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Get Recipients",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Schedule": {
+        "main": [
+          [
+            {
+              "node": "Save Broadcast",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Broadcast": {
+        "main": [
+          [
+            {
+              "node": "Respond Schedule OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Recipients": {
+        "main": [
+          [
+            {
+              "node": "Prepare Messages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Messages": {
+        "main": [
+          [
+            {
+              "node": "Split In Batches",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split In Batches": {
+        "main": [
+          [
+            {
+              "node": "Send Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Collect Stats",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Telegram": {
+        "main": [
+          [
+            {
+              "node": "Wait",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait": {
+        "main": [
+          [
+            {
+              "node": "Split In Batches",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Collect Stats": {
+        "main": [
+          [
+            {
+              "node": "Respond Broadcast OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T04:03:10.529Z",
+        "id": 2150,
+        "workflowId": "1ItmJTcUOGYnyfsE",
+        "versionId": "e7f39a06-a84d-4ee2-bcaa-59bb1fea6725",
+        "event": "deactivated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      },
+      {
+        "createdAt": "2026-02-24T04:03:10.547Z",
+        "id": 2151,
+        "workflowId": "1ItmJTcUOGYnyfsE",
+        "versionId": "e7f39a06-a84d-4ee2-bcaa-59bb1fea6725",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}

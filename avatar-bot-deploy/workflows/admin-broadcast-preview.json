@@ -1,0 +1,452 @@
+{
+  "name": "[MINIAPP] admin-broadcast-preview",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "wh-preview",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "admin-broadcast-preview",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "check-pw-preview",
+      "name": "Check Password",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst body = $json.body || $json;\nconst password = body.password;\nconst filterType = body.filter_type || 'all';\n\nif (password !== '123hors456') {\n  return [{json: {error: 'access_denied', message: 'Invalid password'}}];\n}\n\n// Формируем WHERE-часть запроса на основе filter_type\nlet filterClause = '';\nswitch (filterType) {\n  case 'has_balance':\n    filterClause = 'AND star_balance > 0';\n    break;\n  case 'zero_balance':\n    filterClause = 'AND star_balance = 0';\n    break;\n  case 'new_7d':\n    filterClause = \"AND created_at > NOW() - INTERVAL '7 days'\";\n    break;\n  case 'new_24h':\n    filterClause = \"AND created_at > NOW() - INTERVAL '24 hours'\";\n    break;\n  case 'all':\n  default:\n    filterClause = '';\n    break;\n}\n\nreturn [{json: {filter_type: filterType, filter_clause: filterClause}}];\n"
+      }
+    },
+    {
+      "id": "if-error-preview",
+      "name": "Has Error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        730,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c-err",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-denied-preview",
+      "name": "Respond Denied",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        420
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({error: $json.error, message: $json.message}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "count-preview",
+      "name": "Count Recipients",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        960,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT COUNT(*)::int as count FROM users WHERE blocked = false {{ $json.filter_clause }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "build-resp-preview",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        200
+      ],
+      "parameters": {
+        "jsCode": "\nconst input = $input.first().json;\nconst filterType = $('Check Password').first().json.filter_type;\nconst count = Number(input.count) || 0;\n\nreturn [{json: {\n  count: count,\n  filter_type: filterType,\n}}];\n"
+      }
+    },
+    {
+      "id": "respond-ok-preview",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Password": {
+      "main": [
+        [
+          {
+            "node": "Has Error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Error?": {
+      "main": [
+        [
+          {
+            "node": "Respond Denied",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Count Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count Recipients": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "b2c027d6-54dd-4ca9-ae4b-710743f232ef",
+  "versionCounter": 11,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-20T22:48:12.810Z",
+      "createdAt": "2026-02-20T22:48:12.810Z",
+      "role": "workflow:owner",
+      "workflowId": "qlKRx4whCaMyvbjb",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-24T04:03:08.718Z",
+    "createdAt": "2026-02-24T04:03:08.718Z",
+    "versionId": "b2c027d6-54dd-4ca9-ae4b-710743f232ef",
+    "workflowId": "qlKRx4whCaMyvbjb",
+    "nodes": [
+      {
+        "id": "wh-preview",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          250,
+          300
+        ],
+        "webhookId": "admin-broadcast-preview",
+        "parameters": {
+          "path": "admin-broadcast-preview",
+          "httpMethod": "POST",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "check-pw-preview",
+        "name": "Check Password",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          500,
+          300
+        ],
+        "parameters": {
+          "jsCode": "\nconst body = $json.body || $json;\nconst password = body.password;\nconst filterType = body.filter_type || 'all';\n\nif (password !== '123hors456') {\n  return [{json: {error: 'access_denied', message: 'Invalid password'}}];\n}\n\n// Формируем WHERE-часть запроса на основе filter_type\nlet filterClause = '';\nswitch (filterType) {\n  case 'has_balance':\n    filterClause = 'AND star_balance > 0';\n    break;\n  case 'zero_balance':\n    filterClause = 'AND star_balance = 0';\n    break;\n  case 'new_7d':\n    filterClause = \"AND created_at > NOW() - INTERVAL '7 days'\";\n    break;\n  case 'new_24h':\n    filterClause = \"AND created_at > NOW() - INTERVAL '24 hours'\";\n    break;\n  case 'all':\n  default:\n    filterClause = '';\n    break;\n}\n\nreturn [{json: {filter_type: filterType, filter_clause: filterClause}}];\n"
+        }
+      },
+      {
+        "id": "if-error-preview",
+        "name": "Has Error?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          730,
+          300
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "c-err",
+                "leftValue": "={{ $json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists"
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "respond-denied-preview",
+        "name": "Respond Denied",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          960,
+          420
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({error: $json.error, message: $json.message}) }}",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      },
+      {
+        "id": "count-preview",
+        "name": "Count Recipients",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          960,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=SELECT COUNT(*)::int as count FROM users WHERE blocked = false {{ $json.filter_clause }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "build-resp-preview",
+        "name": "Build Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          200
+        ],
+        "parameters": {
+          "jsCode": "\nconst input = $input.first().json;\nconst filterType = $('Check Password').first().json.filter_type;\nconst count = Number(input.count) || 0;\n\nreturn [{json: {\n  count: count,\n  filter_type: filterType,\n}}];\n"
+        }
+      },
+      {
+        "id": "respond-ok-preview",
+        "name": "Respond OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1440,
+          200
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json }}",
+          "options": {}
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Check Password",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Password": {
+        "main": [
+          [
+            {
+              "node": "Has Error?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Error?": {
+        "main": [
+          [
+            {
+              "node": "Respond Denied",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Count Recipients",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Count Recipients": {
+        "main": [
+          [
+            {
+              "node": "Build Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Response": {
+        "main": [
+          [
+            {
+              "node": "Respond OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T04:03:08.783Z",
+        "id": 2148,
+        "workflowId": "qlKRx4whCaMyvbjb",
+        "versionId": "b2c027d6-54dd-4ca9-ae4b-710743f232ef",
+        "event": "deactivated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      },
+      {
+        "createdAt": "2026-02-24T04:03:08.797Z",
+        "id": 2149,
+        "workflowId": "qlKRx4whCaMyvbjb",
+        "versionId": "b2c027d6-54dd-4ca9-ae4b-710743f232ef",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}

@@ -1,0 +1,1092 @@
+{
+  "name": "[MINIAPP] generate-photosession",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-photosession",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "ps-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        304
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Telegram initData HMAC-SHA256 validation — pure JS\nconst BOT_TOKEN = '{{BOT_TOKEN}}';\nconst MAX_AGE = 86400;\nfunction _sha256(data){const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;const m=Array.from(data),l=m.length*8;m.push(0x80);while(m.length%64!==56)m.push(0);m.push(0,0,0,0,(l>>>24)&0xff,(l>>>16)&0xff,(l>>>8)&0xff,l&0xff);for(let o=0;o<m.length;o+=64){const W=[];for(let i=0;i<16;i++)W[i]=(m[o+i*4]<<24)|(m[o+i*4+1]<<16)|(m[o+i*4+2]<<8)|m[o+i*4+3];for(let i=16;i<64;i++){const s0=((W[i-15]>>>7)|(W[i-15]<<25))^((W[i-15]>>>18)|(W[i-15]<<14))^(W[i-15]>>>3);const s1=((W[i-2]>>>17)|(W[i-2]<<15))^((W[i-2]>>>19)|(W[i-2]<<13))^(W[i-2]>>>10);W[i]=(W[i-16]+s0+W[i-7]+s1)|0;}let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;for(let i=0;i<64;i++){const S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));const ch=(e&f)^(~e&g);const t1=(h+S1+ch+K[i]+W[i])|0;const S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));const maj=(a&b)^(a&c)^(b&c);const t2=(S0+maj)|0;h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;}h0=(h0+a)|0;h1=(h1+b)|0;h2=(h2+c)|0;h3=(h3+d)|0;h4=(h4+e)|0;h5=(h5+f)|0;h6=(h6+g)|0;h7=(h7+h)|0;}const r=[];for(const v of[h0,h1,h2,h3,h4,h5,h6,h7])r.push((v>>>24)&0xff,(v>>>16)&0xff,(v>>>8)&0xff,v&0xff);return r;}\nfunction _hmac(keyB,msgB){let k=Array.from(keyB);if(k.length>64)k=_sha256(k);while(k.length<64)k.push(0);const ip=k.map(b=>b^0x36),op=k.map(b=>b^0x5c);return _sha256(op.concat(_sha256(ip.concat(Array.from(msgB)))));}\nfunction _s2b(s){const b=[];for(let i=0;i<s.length;i++){let c=s.charCodeAt(i);if(c<0x80){b.push(c);}else if(c<0x800){b.push(0xC0|(c>>6),0x80|(c&0x3F));}else if(c>=0xD800&&c<=0xDBFF){const h=c,l=s.charCodeAt(++i),p=((h-0xD800)<<10)+(l-0xDC00)+0x10000;b.push(0xF0|(p>>18),0x80|((p>>12)&0x3F),0x80|((p>>6)&0x3F),0x80|(p&0x3F));}else{b.push(0xE0|(c>>12),0x80|((c>>6)&0x3F),0x80|(c&0x3F));}}return b;}\nfunction _hex(bytes){return bytes.map(b=>b.toString(16).padStart(2,'0')).join('');}\n\nconst body=($input.first().json.body)||{};\nconst initData=body.init_data||'';\nif(!initData){return [{json:{...$input.first().json,_auth_valid:false}}];}\ntry{\n  const params={};\n  for(const pair of initData.split('&')){const idx=pair.indexOf('=');if(idx===-1)continue;params[decodeURIComponent(pair.slice(0,idx))]=decodeURIComponent(pair.slice(idx+1));}\n  if(!params.hash)throw new Error('no hash');\n  if(!params.auth_date)throw new Error('no auth_date');\n  if(!params.user)throw new Error('no user');\n  const authDate=Number(params.auth_date);\n  if(!authDate||authDate<1000000000)throw new Error('invalid auth_date');\n  const age=Math.floor(Date.now()/1000)-authDate;\n  if(age>MAX_AGE)throw new Error('expired');\n  if(age<-300)throw new Error('future auth_date');\n  const checkString=Object.keys(params).filter(k=>k!=='hash').sort().map(k=>k+'='+params[k]).join('\\n');\n  const secret=_hmac(_s2b('WebAppData'),_s2b(BOT_TOKEN));\n  const computed=_hex(_hmac(secret,_s2b(checkString)));\n  if(computed!==params.hash)throw new Error('bad hash');\n  let user={};try{user=JSON.parse(params.user);}catch(e){throw new Error('invalid user json');}\n  if(!user.id)throw new Error('no user.id');\n  const reqUserId=String(body.user_id||'');\n  if(reqUserId&&String(user.id)!==reqUserId){throw new Error('user mismatch: '+user.id+' vs '+reqUserId);}\n  return [{json:{...$input.first().json,_auth_valid:true}}];\n}catch(e){\n  console.error('initData validation failed:',e.message);\n  return [{json:{...$input.first().json,_auth_valid:false,_auth_error:e.message}}];\n}"
+      },
+      "id": "ps-validate",
+      "name": "Validate initData",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auth-check",
+              "leftValue": "={{ $json._auth_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ps-auth-if",
+      "name": "Auth Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        528,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\": \"unauthorized\"}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "ps-respond-unauth",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        784,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT id, star_balance FROM users WHERE id = '{{ $json.body.user_id }}'",
+        "options": {}
+      },
+      "id": "ps-check-balance",
+      "name": "Check Balance",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        784,
+        208
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "balance-check",
+              "leftValue": "={{ $json.star_balance }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ps-has-balance",
+      "name": "Has Balance?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\": \"insufficient_balance\", \"message\": \"Недостаточно звёзд. Нужно 200 ⭐\"}",
+        "options": {
+          "responseCode": 402
+        }
+      },
+      "id": "ps-respond-no-balance",
+      "name": "Respond No Balance",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1312,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook').first().json.body;\n\n// --- Photo 1 (required) ---\nconst base64 = body.photo_base64;\nconst mime = body.mime_type || 'image/jpeg';\nconst ext = mime.includes('png') ? 'png' : 'jpg';\nconst ts = Date.now();\nconst rand = Math.random().toString(36).slice(2, 8);\nconst filename = `photosession/${ts}_${rand}.${ext}`;\nconst buf = Buffer.from(base64, 'base64');\n\nconst result = {\n  s3_filename: filename,\n  s3_url: `https://s3.timeweb.cloud/cf384f43-avatar-bot-generations/${filename}`,\n  user_id: body.user_id,\n  theme: body.theme,\n  mime_type: mime,\n};\n\nconst items = [{\n  json: { ...result, photo_index: 1, has_photo2: !!body.photo2_base64 },\n  binary: {\n    data: {\n      data: buf.toString('base64'),\n      mimeType: mime,\n      fileName: filename,\n    }\n  }\n}];\n\n// --- Photo 2 (optional) ---\nif (body.photo2_base64) {\n  const mime2 = body.photo2_mime_type || 'image/jpeg';\n  const ext2 = mime2.includes('png') ? 'png' : 'jpg';\n  const rand2 = Math.random().toString(36).slice(2, 8);\n  const filename2 = `photosession/${ts}_${rand2}_ref.${ext2}`;\n  const buf2 = Buffer.from(body.photo2_base64, 'base64');\n\n  items.push({\n    json: {\n      s3_filename: filename2,\n      s3_url: `https://s3.timeweb.cloud/cf384f43-avatar-bot-generations/${filename2}`,\n      user_id: body.user_id,\n      theme: body.theme,\n      mime_type: mime2,\n      photo_index: 2,\n      has_photo2: true,\n    },\n    binary: {\n      data: {\n        data: buf2.toString('base64'),\n        mimeType: mime2,\n        fileName: filename2,\n      }\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "ps-upload-photo",
+      "name": "Upload Photo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "avatar-bot-generations",
+        "fileName": "={{ $json.s3_filename }}",
+        "additionalFields": {
+          "acl": "public-read",
+          "storageClass": "STANDARD"
+        }
+      },
+      "id": "ps-s3-upload-photo",
+      "name": "S3 Upload Photo",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        112
+      ],
+      "credentials": {
+        "s3": {
+          "id": "{{S3_CRED_ID}}",
+          "name": "Timeweb S3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE users SET star_balance = star_balance - 200 WHERE id = '{{ $('Webhook').first().json.body.user_id }}' AND star_balance >= 200",
+        "options": {}
+      },
+      "id": "ps-deduct-stars",
+      "name": "Deduct Stars",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2032,
+        112
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"sent\": true}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "ps-respond-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2288,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookData = $('Webhook').first().json.body;\nconst theme = webhookData.theme || 'autumn';\nconst userId = webhookData.user_id;\n\n// Collect all S3 URLs from Upload Photo items\nconst uploadItems = $('Upload Photo').all();\nconst imageUrl = uploadItems[0].json.s3_url;\nconst imageUrl2 = uploadItems.length > 1 ? uploadItems[1].json.s3_url : null;\n\nconst PROMPTS = {\n  new_year: [\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing near a beautifully decorated Christmas tree with twinkling lights and golden ornaments, wearing an elegant red sweater, soft warm lighting, cozy living room background, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is walking through a snowy winter wonderland street decorated with Christmas lights and garlands, wearing a stylish winter coat and scarf, magical snowfall, evening golden hour light, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting by a fireplace holding a cup of hot cocoa, Christmas stockings hanging above, warm orange glow, cozy holiday atmosphere, knitted blanket, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is opening a gift box with a surprised happy expression, festive wrapping paper scattered around, Christmas tree in background, bright joyful lighting, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing in a snow-covered park with a red scarf blowing in the wind, frost-covered trees, magical winter sunset, breath visible in cold air, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is decorating a Christmas tree, reaching up to place a golden star on top, fairy lights reflecting in their eyes, warm holiday home interior, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is at a New Year's party holding a sparkler, confetti falling around them, glamorous outfit, bokeh lights in background, celebration atmosphere, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is making a snowman in a beautiful winter garden, playful expression, red mittens and winter hat, fresh white snow everywhere, bright daylight, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting at a festive dinner table with candles and holiday decorations, elegant outfit, crystal glasses, warm candlelight ambiance, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing on a balcony watching New Year fireworks in the night sky, city lights below, amazed expression, elegant winter evening outfit, photorealistic, 4K quality\"\n  ],\n  autumn: [\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is walking through a beautiful autumn forest path covered with golden and red fallen leaves, wearing a cozy knitted sweater, warm afternoon sunlight filtering through trees, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting on a rustic wooden bench in an autumn park, holding a book, colorful maple trees in background, soft golden hour light, peaceful atmosphere, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing in a pumpkin patch field at sunset, warm earth tones, wearing a plaid flannel shirt, harvest season backdrop, beautiful orange sky, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is enjoying a cup of coffee at an outdoor cafe terrace, autumn leaves falling gently, Parisian style street setting, wearing a stylish trench coat, warm tones, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing on a wooden bridge over a stream with autumn reflections, surrounded by red and gold foliage, misty morning atmosphere, serene expression, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is picking apples in a beautiful orchard, basket in hand, trees full of red apples, dappled sunlight, countryside autumn vibes, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is leaning against an old oak tree with golden leaves, wearing a comfortable autumn outfit, soft wind blowing leaves, dreamy warm lighting, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is cycling along a scenic autumn countryside road lined with orange trees, wind in hair, dynamic composition, warm afternoon light, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting on a hay bale in a harvest field at golden hour, rustic barn in background, warm earth-toned outfit, cinematic composition, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing under a canopy of red maple trees with leaves falling around them like rain, looking up with a smile, magical autumn moment, photorealistic, 4K quality\"\n  ],\n  family: [\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting on a cozy sofa in a bright modern living room, warm natural light from large windows, relaxed happy expression, home comfort atmosphere, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is cooking in a beautiful modern kitchen, flour on their hands, laughing, warm home lighting, fresh ingredients on counter, lifestyle photography style, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is having a picnic in a sunny meadow with a checkered blanket, basket of food, wildflowers around, bright summer day, joyful expression, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is reading a storybook in a cozy reading nook by a window with rain outside, warm lamp light, wrapped in a soft blanket, peaceful atmosphere, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is gardening in a beautiful backyard with blooming flowers, sun hat, gardening gloves, bright natural light, green lush background, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is playing with a golden retriever puppy in a green park, running and laughing, dynamic joyful shot, natural daylight, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is painting on a canvas in a bright art studio, brushes and paints around, creative atmosphere, large windows with natural light, concentrated expression, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting on the porch of a charming cottage, cup of tea in hand, sunrise in background, morning dew on garden, peaceful country life, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is at a farmer's market selecting fresh fruits, vibrant colors of produce around, outdoor market stalls, bright sunny day, cheerful expression, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting by a lake at sunset, barefoot on a wooden dock, calm water reflections, golden evening light, serene peaceful moment, photorealistic, 4K quality\"\n  ],\n  spring: [\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing in a field of blooming cherry blossoms, petals floating in the air, wearing a light elegant dress or shirt, soft pink tones, dreamy spring atmosphere, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is walking through a beautiful tulip garden with rows of colorful flowers, bright spring sunshine, fresh green grass, wearing light spring clothing, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting on a swing in a blooming garden, flowers and butterflies around, gentle spring breeze, soft pastel colors, romantic atmosphere, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is having a picnic under a blooming wisteria tree, lavender and white petals falling, elegant spring outfit, soft dappled light, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is walking along a river bank with weeping willows in fresh green, spring sunshine reflecting on water, peaceful countryside, light clothing, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing in a lavender field at golden hour, purple flowers stretching to horizon, wearing white linen, warm spring sunset, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is riding a bicycle through a flower-lined country lane, basket of wildflowers, spring wind in hair, bright clear sky, dynamic cheerful composition, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is sitting in a blooming rose garden reading a book, surrounded by pink and white roses, stone bench, soft afternoon light, romantic atmosphere, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is standing on a hilltop overlooking a green spring valley with wildflowers, wind blowing gently, panoramic view, fresh air feeling, photorealistic, 4K quality\",\n    \"Keep the person face, hair, skin tone, and all facial features identical. The person is dancing in a rain shower in a spring garden, joyful expression, water droplets sparkling in sunlight, rainbow in background, dynamic movement, photorealistic, 4K quality\"\n  ]\n};\n\nconst prompts = PROMPTS[theme] || PROMPTS.autumn;\n\n// Build image_urls array: always has imageUrl, optionally imageUrl2\nconst image_urls = [imageUrl];\nif (imageUrl2) {\n  image_urls.push(imageUrl2);\n}\n\nreturn prompts.map((prompt, index) => ({\n  json: {\n    prompt,\n    index,\n    image_urls,\n    image_url: imageUrl,\n    user_id: userId,\n    theme,\n    total: 10,\n  }\n}));"
+      },
+      "id": "ps-generate-prompts",
+      "name": "Generate Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2544,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.kie.ai/api/v1/jobs/createTask",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 3488c4a7497efbdaa035822971c57e0a"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"nano-banana-pro\",\n  \"input\": {\n    \"image_urls\": {{ JSON.stringify($json.image_urls) }},\n    \"prompt\": {{ JSON.stringify($json.prompt) }},\n    \"aspect_ratio\": \"4:3\",\n    \"resolution\": \"2K\"\n  }\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ps-create-kie-task",
+      "name": "Create Kie Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2800,
+        112
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "task-created-check",
+              "leftValue": "={{ $json.data.taskId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ps-check-task-created",
+      "name": "Check Task Created",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        112
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ps-wait-5s",
+      "name": "Wait 5s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3328,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.kie.ai/api/v1/jobs/recordInfo?taskId={{ $json.data ? $json.data.taskId : $json.taskId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 3488c4a7497efbdaa035822971c57e0a"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ps-poll-kie",
+      "name": "Poll Kie Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3584,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Evaluate Poll result from Kie.ai\n// Input: response from GET /api/v1/jobs/recordInfo\nconst pollResponse = $json;\nconst taskData = pollResponse.data || {};\n\n// Get taskId from poll response or from propagated data\nconst taskId = taskData.taskId || $json.taskId || '';\n\n// Track poll count through the loop\nconst prevPollCount = $json._poll_count || 0;\nconst pollCount = prevPollCount + 1;\nconst maxPolls = 36; // 36 * 5s = 180s = 3 min\n\n// Kie.ai uses \"state\" field: success, fail, processing\nconst state = (taskData.state || taskData.status || '').toLowerCase();\n\nlet status;\nlet reason = '';\n\nif (state === 'success' || state === 'completed') {\n  status = 'success';\n} else if (state === 'fail' || state === 'failed' || state === 'error') {\n  status = 'failed';\n  reason = 'task_failed';\n} else if (pollCount >= maxPolls) {\n  status = 'failed';\n  reason = 'timeout';\n} else {\n  status = 'running';\n}\n\nreturn {\n  json: {\n    status,\n    reason,\n    taskId,\n    _poll_count: pollCount,\n    // Propagate data.taskId so Poll Kie Status URL expression works in next loop iteration\n    data: { taskId, state, resultJson: taskData.resultJson || null },\n    _original_poll: pollResponse,\n  }\n};"
+      },
+      "id": "ps-evaluate-poll",
+      "name": "Evaluate Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "success-check",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ps-is-success",
+      "name": "Is Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4112,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "continue-check",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "running",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ps-is-running",
+      "name": "Is Still Running?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4368,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Extract image URL from successful Kie.ai poll result\nconst data = $json.data || {};\nconst originalPoll = $json._original_poll || {};\nconst pollData = originalPoll.data || data;\n\nlet imageUrl = '';\n\n// Kie.ai stores result in data.resultJson as a JSON string\ntry {\n  if (pollData.resultJson) {\n    const rj = typeof pollData.resultJson === 'string'\n      ? JSON.parse(pollData.resultJson)\n      : pollData.resultJson;\n    imageUrl = rj.resultUrls?.[0] || rj.result_image_url || rj.url || '';\n  }\n} catch(e) {}\n\n// Fallback: try other common fields\nif (!imageUrl) {\n  imageUrl = pollData.result_image_url || pollData.image_url || pollData.url || '';\n}\nif (!imageUrl && pollData.output) {\n  imageUrl = typeof pollData.output === 'string' ? pollData.output : (pollData.output.url || '');\n}\n\nreturn {\n  json: {\n    image_url: imageUrl,\n    status: imageUrl ? 'ok' : 'error',\n    taskId: $json.taskId || '',\n  }\n};"
+      },
+      "id": "ps-extract-result",
+      "name": "Extract Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4368,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Download result image and prepare binary data for S3 upload\nconst imageUrl = $json.image_url;\nif (!imageUrl) {\n  return { json: { status: 'skip', reason: 'no_url', s3_url: null } };\n}\n\nconst response = await fetch(imageUrl);\nif (!response.ok) {\n  return { json: { status: 'skip', reason: 'download_failed', s3_url: null } };\n}\n\nconst buffer = await response.arrayBuffer();\nconst buf = Buffer.from(buffer);\nconst ext = imageUrl.includes('.png') ? 'png' : 'jpg';\nconst mime = ext === 'png' ? 'image/png' : 'image/jpeg';\nconst ts = Date.now();\nconst rand = Math.random().toString(36).slice(2, 8);\nconst filename = 'results/photosession_' + ts + '_' + rand + '.' + ext;\n\nreturn {\n  json: {\n    s3_filename: filename,\n    s3_url: 'https://s3.timeweb.cloud/cf384f43-avatar-bot-generations/' + filename,\n    original_url: imageUrl,\n    mime_type: mime,\n  },\n  binary: {\n    data: {\n      data: buf.toString('base64'),\n      mimeType: mime,\n      fileName: filename,\n    }\n  }\n};"
+      },
+      "id": "ps-rehost",
+      "name": "Rehost Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4624,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "avatar-bot-generations",
+        "fileName": "={{ $json.s3_filename }}",
+        "additionalFields": {
+          "acl": "public-read",
+          "storageClass": "STANDARD"
+        }
+      },
+      "id": "ps-s3-upload-result",
+      "name": "S3 Upload Result",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        4880,
+        -96
+      ],
+      "credentials": {
+        "s3": {
+          "id": "{{S3_CRED_ID}}",
+          "name": "Timeweb S3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Mark this item as error/skipped\nreturn {\n  json: {\n    s3_url: null,\n    status: 'error',\n    reason: $json.reason || 'unknown_error',\n    taskId: $json.taskId || '',\n  }\n};"
+      },
+      "id": "ps-set-error-result",
+      "name": "Set Error Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4624,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all items from both successful and failed paths\nconst allItems = $input.all();\nconst successUrls = [];\n\nfor (const item of allItems) {\n  const url = item.json.s3_url;\n  if (url) {\n    successUrls.push(url);\n  }\n}\n\nconst userId = $('Webhook').first().json.body.user_id;\nconst theme = $('Webhook').first().json.body.theme;\n\nreturn [{\n  json: {\n    user_id: userId,\n    theme,\n    photo_urls: successUrls,\n    total_generated: successUrls.length,\n    total_requested: 10,\n  }\n}];"
+      },
+      "id": "ps-collect-results",
+      "name": "Collect All Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5152,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-results-check",
+              "leftValue": "={{ $json.total_generated }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ps-has-results",
+      "name": "Has Results?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5408,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Build Telegram sendMediaGroup payload\nconst data = $json;\nconst urls = data.photo_urls || [];\nconst theme = data.theme || 'unknown';\nconst userId = data.user_id;\n\nconst themeNames = {\n  new_year: 'Novogodnyaya',\n  autumn: 'Osennyaya',\n  family: 'Semeynaya',\n  spring: 'Vesennyaya',\n};\nconst themeName = themeNames[theme] || theme;\nconst caption = 'AI Fotosessiya: ' + themeName + '\\n\\n' + urls.length + ' of 10 photos generated';\n\n// Telegram sendMediaGroup: max 10 media items\nconst media = urls.slice(0, 10).map((url, i) => ({\n  type: 'photo',\n  media: url,\n  ...(i === 0 ? { caption } : {}),\n}));\n\nreturn {\n  json: {\n    chat_id: String(userId),\n    media,\n  }\n};"
+      },
+      "id": "ps-prepare-media",
+      "name": "Prepare Media Group",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5664,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{BOT_TOKEN}}/sendMediaGroup",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $json.chat_id }}\",\n  \"media\": {{ JSON.stringify($json.media) }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ps-send-media",
+      "name": "Send Media Group",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5920,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO generations (user_id, mode, result_type, result_url, prompt)\nVALUES (\n  '{{ $('Webhook').first().json.body.user_id }}',\n  'photosession',\n  'image',\n  '{{ $('Collect All Results').first().json.photo_urls[0] }}',\n  'theme:{{ $('Webhook').first().json.body.theme }} | {{ $('Collect All Results').first().json.total_generated }} photos'\n)",
+        "options": {}
+      },
+      "id": "ps-save-generation",
+      "name": "Save Generation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        6192,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    actual_cost: 200,\n    ref_user_id: $('Webhook').first().json.body.user_id,\n    ref_mode: 'photosession',\n  }\n}];"
+      },
+      "id": "ps-calc-cost",
+      "name": "Calc Actual Cost",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "was-paid-check",
+              "leftValue": "={{ $json.actual_cost }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ps-was-paid",
+      "name": "Was Paid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        6704,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT * FROM apply_referral_commission('{{ $json.ref_user_id }}', {{ $json.actual_cost }}, '{{ $json.ref_mode }}')",
+        "options": {}
+      },
+      "id": "ps-apply-referral",
+      "name": "Apply Referral Commission",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        6960,
+        -80
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{BOT_TOKEN}}/sendMessage",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "specifyBody": "string",
+        "body": "=chat_id={{ $json.parent_id }}&text=%E2%AD%90%20%D0%92%D0%B0%D0%BC%20%D0%BD%D0%B0%D1%87%D0%B8%D1%81%D0%BB%D0%B5%D0%BD%D0%B0%20%D1%80%D0%B5%D1%84%D0%B5%D1%80%D0%B0%D0%BB%D1%8C%D0%BD%D0%B0%D1%8F%20%D0%BA%D0%BE%D0%BC%D0%B8%D1%81%D1%81%D0%B8%D1%8F%20{{ $json.commission }}%20%E2%AD%90%20(%D1%83%D1%80%D0%BE%D0%B2%D0%B5%D0%BD%D1%8C%20{{ $json.level }})&parse_mode=HTML",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "ps-notify-referral",
+      "name": "Notify Referral Earnings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7232,
+        -80
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// After S3 upload of 1 or 2 photos, aggregate back to single item\nconst items = $input.all();\nconst urls = items.map(i => i.json.s3_url || i.json.s3_filename);\nconst firstItem = items[0].json;\n\nreturn [{\n  json: {\n    ...firstItem,\n    all_photo_urls: urls,\n    photo_count: items.length,\n  }\n}];"
+      },
+      "id": "ps-merge-after-s3",
+      "name": "Merge After S3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate initData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate initData": {
+      "main": [
+        [
+          {
+            "node": "Auth Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Valid?": {
+      "main": [
+        [
+          {
+            "node": "Check Balance",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Balance": {
+      "main": [
+        [
+          {
+            "node": "Has Balance?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Balance?": {
+      "main": [
+        [
+          {
+            "node": "Upload Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond No Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Photo": {
+      "main": [
+        [
+          {
+            "node": "S3 Upload Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 Upload Photo": {
+      "main": [
+        [
+          {
+            "node": "Merge After S3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduct Stars": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond OK": {
+      "main": [
+        [
+          {
+            "node": "Generate Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Prompts": {
+      "main": [
+        [
+          {
+            "node": "Create Kie Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Kie Task": {
+      "main": [
+        [
+          {
+            "node": "Check Task Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Task Created": {
+      "main": [
+        [
+          {
+            "node": "Wait 5s",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Error Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5s": {
+      "main": [
+        [
+          {
+            "node": "Poll Kie Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Kie Status": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Poll": {
+      "main": [
+        [
+          {
+            "node": "Is Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Success?": {
+      "main": [
+        [
+          {
+            "node": "Extract Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Still Running?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Still Running?": {
+      "main": [
+        [
+          {
+            "node": "Wait 5s",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Error Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Result": {
+      "main": [
+        [
+          {
+            "node": "Rehost Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rehost Result": {
+      "main": [
+        [
+          {
+            "node": "S3 Upload Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 Upload Result": {
+      "main": [
+        [
+          {
+            "node": "Collect All Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Error Result": {
+      "main": [
+        [
+          {
+            "node": "Collect All Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect All Results": {
+      "main": [
+        [
+          {
+            "node": "Has Results?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Results?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Media Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Media Group": {
+      "main": [
+        [
+          {
+            "node": "Send Media Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Media Group": {
+      "main": [
+        [
+          {
+            "node": "Save Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Generation": {
+      "main": [
+        [
+          {
+            "node": "Calc Actual Cost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calc Actual Cost": {
+      "main": [
+        [
+          {
+            "node": "Was Paid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Was Paid?": {
+      "main": [
+        [
+          {
+            "node": "Apply Referral Commission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Referral Commission": {
+      "main": [
+        [
+          {
+            "node": "Notify Referral Earnings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge After S3": {
+      "main": [
+        [
+          {
+            "node": "Deduct Stars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": null,
+  "versionCounter": 26,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-25T11:19:38.259Z",
+      "createdAt": "2026-02-25T11:19:38.259Z",
+      "role": "workflow:owner",
+      "workflowId": "elqdZNPtVYlanzWW",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": null
+}

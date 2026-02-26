@@ -1,0 +1,2102 @@
+{
+  "name": "[DEV] [MINIAPP] bot-start-handler",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dev/bot-start-handler",
+        "options": {}
+      },
+      "id": "wh1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst update = body;\n\n// Pre-checkout query\nif (update.pre_checkout_query) {\n  return [{json: {\n    action: 'pre_checkout',\n    pre_checkout_query_id: update.pre_checkout_query.id,\n  }}];\n}\n\n// Successful payment\nif (update.message?.successful_payment) {\n  const pay = update.message.successful_payment;\n  return [{json: {\n    action: 'payment',\n    chat_id: String(update.message.chat.id),\n    user_id: String(update.message.from.id),\n    username: update.message.from.username || '',\n    stars: pay.total_amount,\n    amount: pay.total_amount,\n    charge_id: pay.telegram_payment_charge_id || '',\n    currency: pay.currency,\n    payload: pay.invoice_payload,\n  }}];\n}\n\n// Callback query (consent button)\nif (update.callback_query) {\n  const cb = update.callback_query;\n  if (cb.data === 'consent_accept') {\n    return [{json: {\n      action: 'consent',\n      callback_query_id: cb.id,\n      chat_id: String(cb.message.chat.id),\n      user_id: String(cb.from.id),\n      consent_message_id: cb.message.message_id,\n    }}];\n  }\n  return [{json: {action: 'ignore'}}];\n}\n\n// Ignore non-message updates\nconst msg = update.message;\nif (!msg) return [{json: {action: 'ignore'}}];\n\n// Ignore messages from bots (e.g. forum_topic_created by the bot itself)\nif (msg.from?.is_bot) return [{json: {action: 'ignore'}}];\n\n// Ignore service messages (forum topics, pinned messages, etc.)\nif (msg.forum_topic_created || msg.forum_topic_closed || msg.forum_topic_reopened ||\n    msg.forum_topic_edited || msg.pinned_message || msg.new_chat_members ||\n    msg.left_chat_member || msg.group_chat_created) {\n  return [{json: {action: 'ignore'}}];\n}\n\nconst text = msg.text || '';\nconst chat_id = String(msg.chat.id);\nconst user_id = String(msg.from.id);\nconst username = msg.from.username || '';\nconst first_name = msg.from.first_name || '';\n\n// /inforef command\nif (text === '/inforef' || text.startsWith('/inforef ')) {\n  return [{json: {\n    action: 'inforef',\n    chat_id,\n    user_id,\n  }}];\n}\n\n// /start command\nlet referrer_id = '';\nif (text.startsWith('/start ref_')) {\n  referrer_id = text.replace('/start ref_', '').trim();\n}\n\nreturn [{json: {\n  action: 'start',\n  chat_id,\n  user_id,\n  username,\n  first_name,\n  referrer_id,\n  text,\n}}];"
+      },
+      "id": "router1",
+      "name": "Route Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond_pc",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "pre_checkout",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if1",
+      "name": "Is Pre-Checkout?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/answerPreCheckoutQuery",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"pre_checkout_query_id\": $json.pre_checkout_query_id, \"ok\": true }) }}",
+        "options": {}
+      },
+      "id": "pre1",
+      "name": "Answer Pre-Checkout",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond_pay",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "payment",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if2",
+      "name": "Is Payment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1280,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=-- Idempotency: insert into payments_log, skip if charge_id already exists\nINSERT INTO payments_log (charge_id, user_id, stars)\nVALUES ('{{ $json.charge_id }}', '{{ $json.user_id }}', {{ $json.stars }})\nON CONFLICT (charge_id) DO NOTHING;\n\n-- Only update balance if we actually inserted (not a duplicate)\nUPDATE users SET star_balance = star_balance + {{ $json.credit }}\nWHERE id = '{{ $json.user_id }}'\nAND EXISTS (\n  SELECT 1 FROM payments_log\n  WHERE charge_id = '{{ $json.charge_id }}'\n  AND created_at > NOW() - INTERVAL '5 seconds'\n);",
+        "options": {}
+      },
+      "id": "sql1",
+      "name": "Update Balance",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1800,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"chat_id\": $(\"Route Update\").first().json.chat_id, \"text\": $(\"Route Update\").first().json.welcome_text, \"parse_mode\": $(\"Route Update\").first().json.parse_mode }) }}",
+        "options": {}
+      },
+      "id": "send1",
+      "name": "Send Photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2060,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=DO $$\nDECLARE\n  v_new_user BIGINT := '{{ $(\"Route Update\").first().json.user_id }}'::BIGINT;\n  v_referrer TEXT := '{{ $(\"Route Update\").first().json.referrer_id }}';\n  v_ref_id BIGINT;\nBEGIN\n  IF v_referrer = '' OR v_referrer::BIGINT = v_new_user THEN RETURN; END IF;\n  v_ref_id := v_referrer::BIGINT;\n\n  INSERT INTO users (id, created_at) VALUES (v_new_user, NOW()) ON CONFLICT (id) DO NOTHING;\n\n  UPDATE users SET\n    referred_by = v_referrer,\n    parent_l1 = v_ref_id,\n    parent_l2 = (SELECT parent_l1 FROM users WHERE id = v_ref_id),\n    parent_l3 = (SELECT parent_l2 FROM users WHERE id = v_ref_id),\n    parent_l4 = (SELECT parent_l3 FROM users WHERE id = v_ref_id),\n    parent_l5 = (SELECT parent_l4 FROM users WHERE id = v_ref_id)\n  WHERE id = v_new_user AND referred_by IS NULL;\nEND $$;",
+        "options": {}
+      },
+      "id": "ref1",
+      "name": "Process Referral",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2840,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond_has_ref",
+              "leftValue": "={{ $(\"Route Update\").first().json.referrer_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has_ref",
+      "name": "Has Referrer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2580,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $('Route Update').item.json.referrer_id }}"
+            },
+            {
+              "name": "text",
+              "value": "=👤 Новый пользователь @{{ $('Webhook').item.json.body.message.chat.username }} перешёл по вашей реферальной ссылке!"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "notify_signup",
+      "name": "Notify Ref Signup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3100,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT mode FROM user_topics WHERE user_id = '{{ $('Route Update').first().json.user_id }}'",
+        "options": {}
+      },
+      "name": "Get Existing Topics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2580,
+        700
+      ],
+      "id": "7af9bb3e-9dfb-469b-9cd2-57da78347664",
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const BOT_TOKEN = '8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU';\nconst FORUM_CHAT_ID = '-1003757993095';\nconst userId = $('Route Update').first().json.user_id;\n\nconst ALL_MODES = [\n  { mode: 'stylize', name: '\\ud83c\\udfa8 \\u0421\\u0442\\u0438\\u043b\\u0438\\u0437\\u0430\\u0446\\u0438\\u044f', color: 16749490 },\n  { mode: 'multi_photo', name: '\\ud83d\\uddbc\\ufe0f \\u041c\\u0443\\u043b\\u044c\\u0442\\u0438-\\u0444\\u043e\\u0442\\u043e', color: 7322096 },\n  { mode: 'style_transfer', name: '\\ud83e\\ude84 \\u041f\\u043e \\u0440\\u0435\\u0444\\u0435\\u0440\\u0435\\u043d\\u0441\\u0443', color: 7322096 },\n  { mode: 'photo_to_video', name: '\\ud83c\\udfac \\u0424\\u043e\\u0442\\u043e \\u0432 \\u0432\\u0438\\u0434\\u0435\\u043e', color: 13338331 },\n  { mode: 'face_swap', name: '\\ud83d\\udd04 Face Swap', color: 16749490 },\n  { mode: 'remove_bg', name: '\\u2702\\ufe0f \\u0423\\u0431\\u0440\\u0430\\u0442\\u044c \\u0444\\u043e\\u043d', color: 16749490 },\n  { mode: 'enhance', name: '\\u2728 \\u0423\\u043b\\u0443\\u0447\\u0448\\u0438\\u0442\\u044c', color: 16749490 },\n  { mode: 'text_to_image', name: '\\ud83d\\udcac \\u0422\\u0435\\u043a\\u0441\\u0442 \\u0432 \\u0444\\u043e\\u0442\\u043e', color: 13338331 },\n];\n\nconst existing = $('Get Existing Topics').all().map(i => i.json.mode);\nconst inserts = [];\n\nfor (const m of ALL_MODES) {\n  if (existing.includes(m.mode)) continue;\n  try {\n    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createForumTopic`, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ chat_id: FORUM_CHAT_ID, name: m.name + ' | User ' + userId, icon_color: m.color })\n    });\n    const data = await res.json();\n    if (data.ok) {\n      inserts.push(`('${userId}', '${m.mode}', ${data.result.message_thread_id})`);\n    }\n  } catch(e) {}\n}\n\nlet sql = 'SELECT 1';\nif (inserts.length > 0) {\n  sql = `INSERT INTO user_topics (user_id, mode, thread_id) VALUES ${inserts.join(', ')} ON CONFLICT (user_id, mode) DO UPDATE SET thread_id = EXCLUDED.thread_id`;\n}\n\nreturn [{ json: { sql, created: inserts.length } }];"
+      },
+      "name": "Create All Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2840,
+        700
+      ],
+      "id": "6b55a980-a283-45c6-94fc-65a1c14f71ac"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {}
+      },
+      "name": "Save New Topics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3100,
+        700
+      ],
+      "id": "e9fb203c-9213-4ba0-a9a0-7fb557e97c83",
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO users (id, username, star_balance, created_at)\nVALUES ('{{ $json.user_id }}', '{{ $json.username }}', 50, NOW())\nON CONFLICT (id) DO UPDATE SET\n  username = COALESCE(NULLIF(EXCLUDED.username, ''), users.username)\nRETURNING (xmax = 0) AS is_new;",
+        "options": {}
+      },
+      "id": "reg_user1",
+      "name": "Register User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1540,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{DOMAIN}}/webhook/welcome-delayed",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Route Update').first().json.chat_id }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 5000
+        }
+      },
+      "id": "trigger_delayed1",
+      "name": "Trigger Delayed Welcome",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2580,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Route Update').first().json.consent_body }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "consent-msg-node",
+      "name": "Send Consent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2320,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-consent",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "consent",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-consent-node",
+      "name": "Is Consent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{DOMAIN}}/webhook/welcome-delayed",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, delete_message_id: $json.unlocked_message_id }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "trigger-cleanup-node",
+      "name": "Trigger Delayed Cleanup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2840,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Route Update').first().json;\nconst chatId = data.chat_id;\nconst callbackId = data.callback_query_id;\nconst consentMsgId = data.consent_message_id;\n\n// Build payloads as JSON strings for HTTP Request nodes\nconst answerPayload = JSON.stringify({\n  callback_query_id: callbackId,\n  text: 'Принято!'\n});\n\nconst deleteConsentPayload = JSON.stringify({\n  chat_id: chatId,\n  message_id: consentMsgId\n});\n\nconst deleteWelcomePayload = JSON.stringify({\n  chat_id: chatId,\n  message_id: consentMsgId - 1\n});\n\nconst unlockText = '🎉 <b>Отлично! Все функции открыты!</b>\\n\\nТеперь ты можешь использовать все возможности AI DEVELOPERS. Нажми кнопку ниже, чтобы начать!';\n\nconst sendUnlockedPayload = JSON.stringify({\n  chat_id: chatId,\n  text: unlockText,\n  parse_mode: 'HTML',\n  reply_markup: {\n    inline_keyboard: [[{\n      text: '\\u{1F680} Открыть приложение',\n      web_app: { url: 'https://{{MINIAPP_URL}}/' }\n    }]]\n  }\n});\n\nreturn [{json: {\n  chat_id: chatId,\n  answerPayload,\n  deleteConsentPayload,\n  deleteWelcomePayload,\n  sendUnlockedPayload\n}}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "prepare-consent-data",
+      "name": "Prepare Consent Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/answerCallbackQuery",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.answerPayload }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "answer-callback-node",
+      "name": "Answer Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/deleteMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Prepare Consent Data').first().json.deleteConsentPayload }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "delete-consent-msg-node",
+      "name": "Delete Consent Msg",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/deleteMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Prepare Consent Data').first().json.deleteWelcomePayload }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "delete-welcome-msg-node",
+      "name": "Delete Welcome Msg",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2060,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Prepare Consent Data').first().json.sendUnlockedPayload }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "send-unlocked-msg-node",
+      "name": "Send Unlocked",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2320,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId = $('Prepare Consent Data').first().json.chat_id;\nconst resp = $input.first().json;\nconst unlockedMsgId = resp.result ? resp.result.message_id : null;\n\nreturn [{json: { chat_id: chatId, unlocked_message_id: unlockedMsgId }}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "extract-unlock-id",
+      "name": "Extract Unlock ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2580,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-is-new",
+              "leftValue": "={{ $json.is_new }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-new-user-node",
+      "name": "Is New User?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId = $('Route Update').first().json.chat_id;\nconst payload = JSON.stringify({\n  chat_id: chatId,\n  text: '\\u{1F44B} <b>С возвращением!</b>\\n\\nРады видеть тебя снова. Нажми кнопку, чтобы открыть приложение!',\n  parse_mode: 'HTML',\n  reply_markup: {\n    inline_keyboard: [[{\n      text: '\\u{1F680} Открыть приложение',\n      web_app: { url: 'https://{{MINIAPP_URL}}/' }\n    }]]\n  }\n});\nreturn [{json: { payload }}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "prepare-welcome-back",
+      "name": "Prepare Welcome Back",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.payload }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "send-welcome-back-node",
+      "name": "Send Welcome Back",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2320,
+        600
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "calc_bonus",
+      "name": "Calculate Bonus",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const stars = $json.stars; // Telegram Stars paid\n\n// Tier bonuses\nconst tiers = [\n  { min: 100, bonus: 0.50 },\n  { min: 50,  bonus: 0.30 },\n  { min: 25,  bonus: 0.20 },\n];\n\nlet bonus = 0;\nfor (const t of tiers) {\n  if (stars >= t.min) {\n    bonus = Math.round(stars * t.bonus);\n    break;\n  }\n}\n\nreturn [{json: { ...$json, bonus, credit: stars + bonus }}];"
+      }
+    },
+    {
+      "id": "is-inforef-node",
+      "name": "Is Inforef?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-inforef",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "inforef",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "send-ref-info-node",
+      "name": "Send Ref Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        500
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: '\\ud83e\\udd1d <b>\\u041f\\u0430\\u0440\\u0442\\u043d\\u0451\\u0440\\u0441\\u043a\\u0430\\u044f \\u043f\\u0440\\u043e\\u0433\\u0440\\u0430\\u043c\\u043c\\u0430 AI DEVELOPERS</b>\\n\\n\\u041f\\u0440\\u0438\\u0433\\u043b\\u0430\\u0448\\u0430\\u0439 \\u0434\\u0440\\u0443\\u0437\\u0435\\u0439 \\u0438 \\u0437\\u0430\\u0440\\u0430\\u0431\\u0430\\u0442\\u044b\\u0432\\u0430\\u0439 Stars \\u0441 \\u043a\\u0430\\u0436\\u0434\\u043e\\u0439 \\u0438\\u0445 \\u0433\\u0435\\u043d\\u0435\\u0440\\u0430\\u0446\\u0438\\u0438!\\n\\n\\ud83d\\udcb0 <b>\\u0421\\u0442\\u0430\\u0432\\u043a\\u0438 \\u043a\\u043e\\u043c\\u0438\\u0441\\u0441\\u0438\\u0439:</b>\\n\\u2022 1-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>7%</b> \\u043e\\u0442 \\u043a\\u0430\\u0436\\u0434\\u043e\\u0439 \\u0442\\u0440\\u0430\\u0442\\u044b Stars\\n\\u2022 2-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>3%</b>\\n\\u2022 3-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>2%</b>\\n\\u2022 4-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>1%</b>\\n\\u2022 5-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>0.5%</b>\\n\\n\\ud83d\\udccc <b>\\u041a\\u0430\\u043a \\u044d\\u0442\\u043e \\u0440\\u0430\\u0431\\u043e\\u0442\\u0430\\u0435\\u0442:</b>\\n1. \\u041f\\u043e\\u0434\\u0435\\u043b\\u0438\\u0441\\u044c \\u0441\\u0432\\u043e\\u0435\\u0439 \\u0440\\u0435\\u0444\\u0435\\u0440\\u0430\\u043b\\u044c\\u043d\\u043e\\u0439 \\u0441\\u0441\\u044b\\u043b\\u043a\\u043e\\u0439\\n2. \\u0414\\u0440\\u0443\\u0433 \\u0440\\u0435\\u0433\\u0438\\u0441\\u0442\\u0440\\u0438\\u0440\\u0443\\u0435\\u0442\\u0441\\u044f \\u2014 \\u0441\\u0442\\u0430\\u043d\\u043e\\u0432\\u0438\\u0442\\u0441\\u044f \\u0442\\u0432\\u043e\\u0438\\u043c \\u043f\\u0430\\u0440\\u0442\\u043d\\u0451\\u0440\\u043e\\u043c 1-\\u0433\\u043e \\u0443\\u0440\\u043e\\u0432\\u043d\\u044f\\n3. \\u041a\\u043e\\u0433\\u0434\\u0430 \\u043e\\u043d \\u0442\\u0440\\u0430\\u0442\\u0438\\u0442 Stars \\u043d\\u0430 \\u0433\\u0435\\u043d\\u0435\\u0440\\u0430\\u0446\\u0438\\u044e \\u2014 \\u0442\\u0435\\u0431\\u0435 \\u043d\\u0430\\u0447\\u0438\\u0441\\u043b\\u044f\\u0435\\u0442\\u0441\\u044f \\u043a\\u043e\\u043c\\u0438\\u0441\\u0441\\u0438\\u044f\\n4. \\u0415\\u0441\\u043b\\u0438 \\u043f\\u0430\\u0440\\u0442\\u043d\\u0451\\u0440 \\u043f\\u0440\\u0438\\u0433\\u043b\\u0430\\u0441\\u0438\\u0442 \\u0434\\u0440\\u0443\\u0433\\u0430 \\u2014 \\u0442\\u044b \\u043f\\u043e\\u043b\\u0443\\u0447\\u0430\\u0435\\u0448\\u044c % \\u0438 \\u0441 \\u043d\\u0435\\u0433\\u043e (2-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c), \\u0438 \\u0442\\u0430\\u043a \\u0434\\u043e 5!\\n\\n\\u2728 \\u041a\\u043e\\u043c\\u0438\\u0441\\u0441\\u0438\\u044f \\u043d\\u0430\\u0447\\u0438\\u0441\\u043b\\u044f\\u0435\\u0442\\u0441\\u044f \\u0430\\u0432\\u0442\\u043e\\u043c\\u0430\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438 \\u043f\\u0440\\u0438 \\u043a\\u0430\\u0436\\u0434\\u043e\\u0439 \\u043e\\u043f\\u043b\\u0430\\u0447\\u0435\\u043d\\u043d\\u043e\\u0439 \\u0433\\u0435\\u043d\\u0435\\u0440\\u0430\\u0446\\u0438\\u0438.\\n\\n\\ud83d\\udc49 \\u041e\\u0442\\u043a\\u0440\\u043e\\u0439 \\u043f\\u0440\\u0438\\u043b\\u043e\\u0436\\u0435\\u043d\\u0438\\u0435 \\u2192 \\u0440\\u0430\\u0437\\u0434\\u0435\\u043b \\u00ab\\u041f\\u0430\\u0440\\u0442\\u043d\\u0451\\u0440\\u044b\\u00bb \\u0447\\u0442\\u043e\\u0431\\u044b \\u0443\\u0432\\u0438\\u0434\\u0435\\u0442\\u044c \\u0441\\u0442\\u0430\\u0442\\u0438\\u0441\\u0442\\u0438\\u043a\\u0443 \\u0438 \\u0441\\u043a\\u043e\\u043f\\u0438\\u0440\\u043e\\u0432\\u0430\\u0442\\u044c \\u0441\\u0441\\u044b\\u043b\\u043a\\u0443.', parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '\\ud83d\\ude80 \\u041e\\u0442\\u043a\\u0440\\u044b\\u0442\\u044c \\u043f\\u0440\\u0438\\u043b\\u043e\\u0436\\u0435\\u043d\\u0438\\u0435', web_app: { url: 'https://{{MINIAPP_URL}}/' } }]] } }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Update": {
+      "main": [
+        [
+          {
+            "node": "Is Pre-Checkout?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Pre-Checkout?": {
+      "main": [
+        [
+          {
+            "node": "Answer Pre-Checkout",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Consent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Payment?": {
+      "main": [
+        [
+          {
+            "node": "Calculate Bonus",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Register User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Photo": {
+      "main": [
+        [
+          {
+            "node": "Send Consent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Referrer?": {
+      "main": [
+        [
+          {
+            "node": "Process Referral",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Referral": {
+      "main": [
+        [
+          {
+            "node": "Notify Ref Signup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Topics": {
+      "main": [
+        [
+          {
+            "node": "Create All Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create All Topics": {
+      "main": [
+        [
+          {
+            "node": "Save New Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register User": {
+      "main": [
+        [
+          {
+            "node": "Is New User?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Consent": {
+      "main": [
+        [
+          {
+            "node": "Has Referrer?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Existing Topics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trigger Delayed Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Consent?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Consent Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Inforef?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Consent Data": {
+      "main": [
+        [
+          {
+            "node": "Answer Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Callback": {
+      "main": [
+        [
+          {
+            "node": "Delete Consent Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Consent Msg": {
+      "main": [
+        [
+          {
+            "node": "Delete Welcome Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Welcome Msg": {
+      "main": [
+        [
+          {
+            "node": "Send Unlocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Unlocked": {
+      "main": [
+        [
+          {
+            "node": "Extract Unlock ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Unlock ID": {
+      "main": [
+        [
+          {
+            "node": "Trigger Delayed Cleanup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New User?": {
+      "main": [
+        [
+          {
+            "node": "Send Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Welcome Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Welcome Back": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Bonus": {
+      "main": [
+        [
+          {
+            "node": "Update Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Inforef?": {
+      "main": [
+        [
+          {
+            "node": "Send Ref Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Payment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "175085ad-4117-447a-9185-61e44d183a34",
+  "versionCounter": 10,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-26T04:33:34.094Z",
+      "createdAt": "2026-02-26T04:33:34.094Z",
+      "role": "workflow:owner",
+      "workflowId": "Z8oemCWVXaK6qJPQ",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-26T04:42:15.932Z",
+    "createdAt": "2026-02-26T04:42:15.932Z",
+    "versionId": "175085ad-4117-447a-9185-61e44d183a34",
+    "workflowId": "Z8oemCWVXaK6qJPQ",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "dev/bot-start-handler",
+          "options": {}
+        },
+        "id": "wh1",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          240,
+          300
+        ],
+        "webhookId": "dev-bot-start-handler"
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body;\nconst update = body;\n\n// Pre-checkout query\nif (update.pre_checkout_query) {\n  return [{json: {\n    action: 'pre_checkout',\n    pre_checkout_query_id: update.pre_checkout_query.id,\n  }}];\n}\n\n// Successful payment\nif (update.message?.successful_payment) {\n  const pay = update.message.successful_payment;\n  return [{json: {\n    action: 'payment',\n    chat_id: String(update.message.chat.id),\n    user_id: String(update.message.from.id),\n    username: update.message.from.username || '',\n    stars: pay.total_amount,\n    amount: pay.total_amount,\n    charge_id: pay.telegram_payment_charge_id || '',\n    currency: pay.currency,\n    payload: pay.invoice_payload,\n  }}];\n}\n\n// Callback query (consent button)\nif (update.callback_query) {\n  const cb = update.callback_query;\n  if (cb.data === 'consent_accept') {\n    return [{json: {\n      action: 'consent',\n      callback_query_id: cb.id,\n      chat_id: String(cb.message.chat.id),\n      user_id: String(cb.from.id),\n      consent_message_id: cb.message.message_id,\n    }}];\n  }\n  return [{json: {action: 'ignore'}}];\n}\n\n// Ignore non-message updates\nconst msg = update.message;\nif (!msg) return [{json: {action: 'ignore'}}];\n\n// Ignore messages from bots (e.g. forum_topic_created by the bot itself)\nif (msg.from?.is_bot) return [{json: {action: 'ignore'}}];\n\n// Ignore service messages (forum topics, pinned messages, etc.)\nif (msg.forum_topic_created || msg.forum_topic_closed || msg.forum_topic_reopened ||\n    msg.forum_topic_edited || msg.pinned_message || msg.new_chat_members ||\n    msg.left_chat_member || msg.group_chat_created) {\n  return [{json: {action: 'ignore'}}];\n}\n\nconst text = msg.text || '';\nconst chat_id = String(msg.chat.id);\nconst user_id = String(msg.from.id);\nconst username = msg.from.username || '';\nconst first_name = msg.from.first_name || '';\n\n// /inforef command\nif (text === '/inforef' || text.startsWith('/inforef ')) {\n  return [{json: {\n    action: 'inforef',\n    chat_id,\n    user_id,\n  }}];\n}\n\n// /start command\nlet referrer_id = '';\nif (text.startsWith('/start ref_')) {\n  referrer_id = text.replace('/start ref_', '').trim();\n}\n\nreturn [{json: {\n  action: 'start',\n  chat_id,\n  user_id,\n  username,\n  first_name,\n  referrer_id,\n  text,\n}}];"
+        },
+        "id": "router1",
+        "name": "Route Update",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          500,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "cond_pc",
+                "leftValue": "={{ $json.action }}",
+                "rightValue": "pre_checkout",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "if1",
+        "name": "Is Pre-Checkout?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          760,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/answerPreCheckoutQuery",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ \"pre_checkout_query_id\": $json.pre_checkout_query_id, \"ok\": true }) }}",
+          "options": {}
+        },
+        "id": "pre1",
+        "name": "Answer Pre-Checkout",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1020,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "cond_pay",
+                "leftValue": "={{ $json.action }}",
+                "rightValue": "payment",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "if2",
+        "name": "Is Payment?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1280,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=-- Idempotency: insert into payments_log, skip if charge_id already exists\nINSERT INTO payments_log (charge_id, user_id, stars)\nVALUES ('{{ $json.charge_id }}', '{{ $json.user_id }}', {{ $json.stars }})\nON CONFLICT (charge_id) DO NOTHING;\n\n-- Only update balance if we actually inserted (not a duplicate)\nUPDATE users SET star_balance = star_balance + {{ $json.credit }}\nWHERE id = '{{ $json.user_id }}'\nAND EXISTS (\n  SELECT 1 FROM payments_log\n  WHERE charge_id = '{{ $json.charge_id }}'\n  AND created_at > NOW() - INTERVAL '5 seconds'\n);",
+          "options": {}
+        },
+        "id": "sql1",
+        "name": "Update Balance",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1800,
+          200
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ \"chat_id\": $(\"Route Update\").first().json.chat_id, \"text\": $(\"Route Update\").first().json.welcome_text, \"parse_mode\": $(\"Route Update\").first().json.parse_mode }) }}",
+          "options": {}
+        },
+        "id": "send1",
+        "name": "Send Photo",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2060,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=DO $$\nDECLARE\n  v_new_user BIGINT := '{{ $(\"Route Update\").first().json.user_id }}'::BIGINT;\n  v_referrer TEXT := '{{ $(\"Route Update\").first().json.referrer_id }}';\n  v_ref_id BIGINT;\nBEGIN\n  IF v_referrer = '' OR v_referrer::BIGINT = v_new_user THEN RETURN; END IF;\n  v_ref_id := v_referrer::BIGINT;\n\n  INSERT INTO users (id, created_at) VALUES (v_new_user, NOW()) ON CONFLICT (id) DO NOTHING;\n\n  UPDATE users SET\n    referred_by = v_referrer,\n    parent_l1 = v_ref_id,\n    parent_l2 = (SELECT parent_l1 FROM users WHERE id = v_ref_id),\n    parent_l3 = (SELECT parent_l2 FROM users WHERE id = v_ref_id),\n    parent_l4 = (SELECT parent_l3 FROM users WHERE id = v_ref_id),\n    parent_l5 = (SELECT parent_l4 FROM users WHERE id = v_ref_id)\n  WHERE id = v_new_user AND referred_by IS NULL;\nEND $$;",
+          "options": {}
+        },
+        "id": "ref1",
+        "name": "Process Referral",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          2840,
+          500
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "cond_has_ref",
+                "leftValue": "={{ $(\"Route Update\").first().json.referrer_id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "has_ref",
+        "name": "Has Referrer?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2580,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "chat_id",
+                "value": "={{ $('Route Update').item.json.referrer_id }}"
+              },
+              {
+                "name": "text",
+                "value": "=👤 Новый пользователь @{{ $('Webhook').item.json.body.message.chat.username }} перешёл по вашей реферальной ссылке!"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "notify_signup",
+        "name": "Notify Ref Signup",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3100,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=SELECT mode FROM user_topics WHERE user_id = '{{ $('Route Update').first().json.user_id }}'",
+          "options": {}
+        },
+        "name": "Get Existing Topics",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          2580,
+          700
+        ],
+        "id": "7af9bb3e-9dfb-469b-9cd2-57da78347664",
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const BOT_TOKEN = '8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU';\nconst FORUM_CHAT_ID = '-1003757993095';\nconst userId = $('Route Update').first().json.user_id;\n\nconst ALL_MODES = [\n  { mode: 'stylize', name: '\\ud83c\\udfa8 \\u0421\\u0442\\u0438\\u043b\\u0438\\u0437\\u0430\\u0446\\u0438\\u044f', color: 16749490 },\n  { mode: 'multi_photo', name: '\\ud83d\\uddbc\\ufe0f \\u041c\\u0443\\u043b\\u044c\\u0442\\u0438-\\u0444\\u043e\\u0442\\u043e', color: 7322096 },\n  { mode: 'style_transfer', name: '\\ud83e\\ude84 \\u041f\\u043e \\u0440\\u0435\\u0444\\u0435\\u0440\\u0435\\u043d\\u0441\\u0443', color: 7322096 },\n  { mode: 'photo_to_video', name: '\\ud83c\\udfac \\u0424\\u043e\\u0442\\u043e \\u0432 \\u0432\\u0438\\u0434\\u0435\\u043e', color: 13338331 },\n  { mode: 'face_swap', name: '\\ud83d\\udd04 Face Swap', color: 16749490 },\n  { mode: 'remove_bg', name: '\\u2702\\ufe0f \\u0423\\u0431\\u0440\\u0430\\u0442\\u044c \\u0444\\u043e\\u043d', color: 16749490 },\n  { mode: 'enhance', name: '\\u2728 \\u0423\\u043b\\u0443\\u0447\\u0448\\u0438\\u0442\\u044c', color: 16749490 },\n  { mode: 'text_to_image', name: '\\ud83d\\udcac \\u0422\\u0435\\u043a\\u0441\\u0442 \\u0432 \\u0444\\u043e\\u0442\\u043e', color: 13338331 },\n];\n\nconst existing = $('Get Existing Topics').all().map(i => i.json.mode);\nconst inserts = [];\n\nfor (const m of ALL_MODES) {\n  if (existing.includes(m.mode)) continue;\n  try {\n    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createForumTopic`, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ chat_id: FORUM_CHAT_ID, name: m.name + ' | User ' + userId, icon_color: m.color })\n    });\n    const data = await res.json();\n    if (data.ok) {\n      inserts.push(`('${userId}', '${m.mode}', ${data.result.message_thread_id})`);\n    }\n  } catch(e) {}\n}\n\nlet sql = 'SELECT 1';\nif (inserts.length > 0) {\n  sql = `INSERT INTO user_topics (user_id, mode, thread_id) VALUES ${inserts.join(', ')} ON CONFLICT (user_id, mode) DO UPDATE SET thread_id = EXCLUDED.thread_id`;\n}\n\nreturn [{ json: { sql, created: inserts.length } }];"
+        },
+        "name": "Create All Topics",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2840,
+          700
+        ],
+        "id": "6b55a980-a283-45c6-94fc-65a1c14f71ac"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "={{ $json.sql }}",
+          "options": {}
+        },
+        "name": "Save New Topics",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          3100,
+          700
+        ],
+        "id": "e9fb203c-9213-4ba0-a9a0-7fb557e97c83",
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=INSERT INTO users (id, username, star_balance, created_at)\nVALUES ('{{ $json.user_id }}', '{{ $json.username }}', 50, NOW())\nON CONFLICT (id) DO UPDATE SET\n  username = COALESCE(NULLIF(EXCLUDED.username, ''), users.username)\nRETURNING (xmax = 0) AS is_new;",
+          "options": {}
+        },
+        "id": "reg_user1",
+        "name": "Register User",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1540,
+          400
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://{{DOMAIN}}/webhook/welcome-delayed",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $('Route Update').first().json.chat_id }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 5000
+          }
+        },
+        "id": "trigger_delayed1",
+        "name": "Trigger Delayed Welcome",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2580,
+          600
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $('Route Update').first().json.consent_body }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "id": "consent-msg-node",
+        "name": "Send Consent",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2320,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "is-consent",
+                "leftValue": "={{ $json.action }}",
+                "rightValue": "consent",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "is-consent-node",
+        "name": "Is Consent?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1020,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://{{DOMAIN}}/webhook/welcome-delayed",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, delete_message_id: $json.unlocked_message_id }) }}",
+          "options": {
+            "timeout": 5000
+          }
+        },
+        "id": "trigger-cleanup-node",
+        "name": "Trigger Delayed Cleanup",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2840,
+          100
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $('Route Update').first().json;\nconst chatId = data.chat_id;\nconst callbackId = data.callback_query_id;\nconst consentMsgId = data.consent_message_id;\n\n// Build payloads as JSON strings for HTTP Request nodes\nconst answerPayload = JSON.stringify({\n  callback_query_id: callbackId,\n  text: 'Принято!'\n});\n\nconst deleteConsentPayload = JSON.stringify({\n  chat_id: chatId,\n  message_id: consentMsgId\n});\n\nconst deleteWelcomePayload = JSON.stringify({\n  chat_id: chatId,\n  message_id: consentMsgId - 1\n});\n\nconst unlockText = '🎉 <b>Отлично! Все функции открыты!</b>\\n\\nТеперь ты можешь использовать все возможности AI DEVELOPERS. Нажми кнопку ниже, чтобы начать!';\n\nconst sendUnlockedPayload = JSON.stringify({\n  chat_id: chatId,\n  text: unlockText,\n  parse_mode: 'HTML',\n  reply_markup: {\n    inline_keyboard: [[{\n      text: '\\u{1F680} Открыть приложение',\n      web_app: { url: 'https://{{MINIAPP_URL}}/' }\n    }]]\n  }\n});\n\nreturn [{json: {\n  chat_id: chatId,\n  answerPayload,\n  deleteConsentPayload,\n  deleteWelcomePayload,\n  sendUnlockedPayload\n}}];",
+          "mode": "runOnceForAllItems"
+        },
+        "id": "prepare-consent-data",
+        "name": "Prepare Consent Data",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1280,
+          100
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/answerCallbackQuery",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.answerPayload }}",
+          "options": {
+            "timeout": 5000
+          }
+        },
+        "id": "answer-callback-node",
+        "name": "Answer Callback",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1540,
+          100
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/deleteMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $('Prepare Consent Data').first().json.deleteConsentPayload }}",
+          "options": {
+            "timeout": 5000
+          }
+        },
+        "id": "delete-consent-msg-node",
+        "name": "Delete Consent Msg",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1800,
+          100
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/deleteMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $('Prepare Consent Data').first().json.deleteWelcomePayload }}",
+          "options": {
+            "timeout": 5000
+          }
+        },
+        "id": "delete-welcome-msg-node",
+        "name": "Delete Welcome Msg",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2060,
+          100
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $('Prepare Consent Data').first().json.sendUnlockedPayload }}",
+          "options": {
+            "timeout": 5000
+          }
+        },
+        "id": "send-unlocked-msg-node",
+        "name": "Send Unlocked",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2320,
+          100
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const chatId = $('Prepare Consent Data').first().json.chat_id;\nconst resp = $input.first().json;\nconst unlockedMsgId = resp.result ? resp.result.message_id : null;\n\nreturn [{json: { chat_id: chatId, unlocked_message_id: unlockedMsgId }}];",
+          "mode": "runOnceForAllItems"
+        },
+        "id": "extract-unlock-id",
+        "name": "Extract Unlock ID",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2580,
+          100
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "check-is-new",
+                "leftValue": "={{ $json.is_new }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "is-new-user-node",
+        "name": "Is New User?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1800,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const chatId = $('Route Update').first().json.chat_id;\nconst payload = JSON.stringify({\n  chat_id: chatId,\n  text: '\\u{1F44B} <b>С возвращением!</b>\\n\\nРады видеть тебя снова. Нажми кнопку, чтобы открыть приложение!',\n  parse_mode: 'HTML',\n  reply_markup: {\n    inline_keyboard: [[{\n      text: '\\u{1F680} Открыть приложение',\n      web_app: { url: 'https://{{MINIAPP_URL}}/' }\n    }]]\n  }\n});\nreturn [{json: { payload }}];",
+          "mode": "runOnceForAllItems"
+        },
+        "id": "prepare-welcome-back",
+        "name": "Prepare Welcome Back",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2060,
+          600
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.payload }}",
+          "options": {
+            "timeout": 5000
+          }
+        },
+        "id": "send-welcome-back-node",
+        "name": "Send Welcome Back",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2320,
+          600
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "calc_bonus",
+        "name": "Calculate Bonus",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1540,
+          200
+        ],
+        "parameters": {
+          "jsCode": "const stars = $json.stars; // Telegram Stars paid\n\n// Tier bonuses\nconst tiers = [\n  { min: 100, bonus: 0.50 },\n  { min: 50,  bonus: 0.30 },\n  { min: 25,  bonus: 0.20 },\n];\n\nlet bonus = 0;\nfor (const t of tiers) {\n  if (stars >= t.min) {\n    bonus = Math.round(stars * t.bonus);\n    break;\n  }\n}\n\nreturn [{json: { ...$json, bonus, credit: stars + bonus }}];"
+        }
+      },
+      {
+        "id": "is-inforef-node",
+        "name": "Is Inforef?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1280,
+          500
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "check-inforef",
+                "leftValue": "={{ $json.action }}",
+                "rightValue": "inforef",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "send-ref-info-node",
+        "name": "Send Ref Info",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1540,
+          500
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot8356045318:AAHRuSUMVek8hUC0Q9c6T4L-mmluCKyqHkU/sendMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: '\\ud83e\\udd1d <b>\\u041f\\u0430\\u0440\\u0442\\u043d\\u0451\\u0440\\u0441\\u043a\\u0430\\u044f \\u043f\\u0440\\u043e\\u0433\\u0440\\u0430\\u043c\\u043c\\u0430 AI DEVELOPERS</b>\\n\\n\\u041f\\u0440\\u0438\\u0433\\u043b\\u0430\\u0448\\u0430\\u0439 \\u0434\\u0440\\u0443\\u0437\\u0435\\u0439 \\u0438 \\u0437\\u0430\\u0440\\u0430\\u0431\\u0430\\u0442\\u044b\\u0432\\u0430\\u0439 Stars \\u0441 \\u043a\\u0430\\u0436\\u0434\\u043e\\u0439 \\u0438\\u0445 \\u0433\\u0435\\u043d\\u0435\\u0440\\u0430\\u0446\\u0438\\u0438!\\n\\n\\ud83d\\udcb0 <b>\\u0421\\u0442\\u0430\\u0432\\u043a\\u0438 \\u043a\\u043e\\u043c\\u0438\\u0441\\u0441\\u0438\\u0439:</b>\\n\\u2022 1-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>7%</b> \\u043e\\u0442 \\u043a\\u0430\\u0436\\u0434\\u043e\\u0439 \\u0442\\u0440\\u0430\\u0442\\u044b Stars\\n\\u2022 2-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>3%</b>\\n\\u2022 3-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>2%</b>\\n\\u2022 4-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>1%</b>\\n\\u2022 5-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c \\u2014 <b>0.5%</b>\\n\\n\\ud83d\\udccc <b>\\u041a\\u0430\\u043a \\u044d\\u0442\\u043e \\u0440\\u0430\\u0431\\u043e\\u0442\\u0430\\u0435\\u0442:</b>\\n1. \\u041f\\u043e\\u0434\\u0435\\u043b\\u0438\\u0441\\u044c \\u0441\\u0432\\u043e\\u0435\\u0439 \\u0440\\u0435\\u0444\\u0435\\u0440\\u0430\\u043b\\u044c\\u043d\\u043e\\u0439 \\u0441\\u0441\\u044b\\u043b\\u043a\\u043e\\u0439\\n2. \\u0414\\u0440\\u0443\\u0433 \\u0440\\u0435\\u0433\\u0438\\u0441\\u0442\\u0440\\u0438\\u0440\\u0443\\u0435\\u0442\\u0441\\u044f \\u2014 \\u0441\\u0442\\u0430\\u043d\\u043e\\u0432\\u0438\\u0442\\u0441\\u044f \\u0442\\u0432\\u043e\\u0438\\u043c \\u043f\\u0430\\u0440\\u0442\\u043d\\u0451\\u0440\\u043e\\u043c 1-\\u0433\\u043e \\u0443\\u0440\\u043e\\u0432\\u043d\\u044f\\n3. \\u041a\\u043e\\u0433\\u0434\\u0430 \\u043e\\u043d \\u0442\\u0440\\u0430\\u0442\\u0438\\u0442 Stars \\u043d\\u0430 \\u0433\\u0435\\u043d\\u0435\\u0440\\u0430\\u0446\\u0438\\u044e \\u2014 \\u0442\\u0435\\u0431\\u0435 \\u043d\\u0430\\u0447\\u0438\\u0441\\u043b\\u044f\\u0435\\u0442\\u0441\\u044f \\u043a\\u043e\\u043c\\u0438\\u0441\\u0441\\u0438\\u044f\\n4. \\u0415\\u0441\\u043b\\u0438 \\u043f\\u0430\\u0440\\u0442\\u043d\\u0451\\u0440 \\u043f\\u0440\\u0438\\u0433\\u043b\\u0430\\u0441\\u0438\\u0442 \\u0434\\u0440\\u0443\\u0433\\u0430 \\u2014 \\u0442\\u044b \\u043f\\u043e\\u043b\\u0443\\u0447\\u0430\\u0435\\u0448\\u044c % \\u0438 \\u0441 \\u043d\\u0435\\u0433\\u043e (2-\\u0439 \\u0443\\u0440\\u043e\\u0432\\u0435\\u043d\\u044c), \\u0438 \\u0442\\u0430\\u043a \\u0434\\u043e 5!\\n\\n\\u2728 \\u041a\\u043e\\u043c\\u0438\\u0441\\u0441\\u0438\\u044f \\u043d\\u0430\\u0447\\u0438\\u0441\\u043b\\u044f\\u0435\\u0442\\u0441\\u044f \\u0430\\u0432\\u0442\\u043e\\u043c\\u0430\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438 \\u043f\\u0440\\u0438 \\u043a\\u0430\\u0436\\u0434\\u043e\\u0439 \\u043e\\u043f\\u043b\\u0430\\u0447\\u0435\\u043d\\u043d\\u043e\\u0439 \\u0433\\u0435\\u043d\\u0435\\u0440\\u0430\\u0446\\u0438\\u0438.\\n\\n\\ud83d\\udc49 \\u041e\\u0442\\u043a\\u0440\\u043e\\u0439 \\u043f\\u0440\\u0438\\u043b\\u043e\\u0436\\u0435\\u043d\\u0438\\u0435 \\u2192 \\u0440\\u0430\\u0437\\u0434\\u0435\\u043b \\u00ab\\u041f\\u0430\\u0440\\u0442\\u043d\\u0451\\u0440\\u044b\\u00bb \\u0447\\u0442\\u043e\\u0431\\u044b \\u0443\\u0432\\u0438\\u0434\\u0435\\u0442\\u044c \\u0441\\u0442\\u0430\\u0442\\u0438\\u0441\\u0442\\u0438\\u043a\\u0443 \\u0438 \\u0441\\u043a\\u043e\\u043f\\u0438\\u0440\\u043e\\u0432\\u0430\\u0442\\u044c \\u0441\\u0441\\u044b\\u043b\\u043a\\u0443.', parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '\\ud83d\\ude80 \\u041e\\u0442\\u043a\\u0440\\u044b\\u0442\\u044c \\u043f\\u0440\\u0438\\u043b\\u043e\\u0436\\u0435\\u043d\\u0438\\u0435', web_app: { url: 'https://{{MINIAPP_URL}}/' } }]] } }) }}",
+          "options": {
+            "timeout": 5000
+          }
+        },
+        "onError": "continueRegularOutput"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Route Update",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route Update": {
+        "main": [
+          [
+            {
+              "node": "Is Pre-Checkout?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Pre-Checkout?": {
+        "main": [
+          [
+            {
+              "node": "Answer Pre-Checkout",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Consent?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Payment?": {
+        "main": [
+          [
+            {
+              "node": "Calculate Bonus",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Register User",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Photo": {
+        "main": [
+          [
+            {
+              "node": "Send Consent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Referrer?": {
+        "main": [
+          [
+            {
+              "node": "Process Referral",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Process Referral": {
+        "main": [
+          [
+            {
+              "node": "Notify Ref Signup",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Existing Topics": {
+        "main": [
+          [
+            {
+              "node": "Create All Topics",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create All Topics": {
+        "main": [
+          [
+            {
+              "node": "Save New Topics",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Register User": {
+        "main": [
+          [
+            {
+              "node": "Is New User?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Consent": {
+        "main": [
+          [
+            {
+              "node": "Has Referrer?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Get Existing Topics",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Trigger Delayed Welcome",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Consent?": {
+        "main": [
+          [
+            {
+              "node": "Prepare Consent Data",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Inforef?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Consent Data": {
+        "main": [
+          [
+            {
+              "node": "Answer Callback",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Answer Callback": {
+        "main": [
+          [
+            {
+              "node": "Delete Consent Msg",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete Consent Msg": {
+        "main": [
+          [
+            {
+              "node": "Delete Welcome Msg",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete Welcome Msg": {
+        "main": [
+          [
+            {
+              "node": "Send Unlocked",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Unlocked": {
+        "main": [
+          [
+            {
+              "node": "Extract Unlock ID",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Unlock ID": {
+        "main": [
+          [
+            {
+              "node": "Trigger Delayed Cleanup",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is New User?": {
+        "main": [
+          [
+            {
+              "node": "Send Photo",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prepare Welcome Back",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Welcome Back": {
+        "main": [
+          [
+            {
+              "node": "Send Welcome Back",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Calculate Bonus": {
+        "main": [
+          [
+            {
+              "node": "Update Balance",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Inforef?": {
+        "main": [
+          [
+            {
+              "node": "Send Ref Info",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Payment?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-26T04:42:16.492Z",
+        "id": 2381,
+        "workflowId": "Z8oemCWVXaK6qJPQ",
+        "versionId": "175085ad-4117-447a-9185-61e44d183a34",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}

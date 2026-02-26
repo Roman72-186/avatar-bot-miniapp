@@ -1,0 +1,282 @@
+{
+  "name": "[MINIAPP] s3-upload",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "s3-upload",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "id": "wh-s3up-new",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $(\"Webhook\").first().json.body;\nconst base64Data = body.photo_base64;\nconst mimeType = body.mime_type || \"image/jpeg\";\nconst fileName = body.file_name || \"photo.jpg\";\n\nif (!base64Data) throw new Error(\"photo_base64 is required\");\n\nconst base64Clean = base64Data.includes(\",\")\n  ? base64Data.split(\",\")[1]\n  : base64Data;\n\nconst timestamp = Date.now();\nconst randomStr = Math.random().toString(36).substring(2, 8);\nconst ext = mimeType.includes(\"png\") ? \"png\" : (mimeType.includes(\"webp\") ? \"webp\" : \"jpg\");\nconst s3Filename = `uploads/${timestamp}_${randomStr}.${ext}`;\nconst s3Url = `https://avatar-bot-generations.s3.twcstorage.ru/${s3Filename}`;\n\nconst buffer = Buffer.from(base64Clean, \"base64\");\nconst binary = await this.helpers.prepareBinaryData(buffer, fileName, mimeType);\n\nreturn [{ json: { filename: s3Filename, s3_url: s3Url, mimeType }, binary: { data: binary } }];"
+      },
+      "name": "Convert to Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ],
+      "id": "conv-bin-s3up"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "=avatar-bot-generations",
+        "fileName": "={{ $json.filename }}",
+        "binaryData": true,
+        "additionalFields": {
+          "contentType": "={{ $json.mimeType }}",
+          "cacheControl": "public, max-age=31536000"
+        },
+        "acl": "publicRead"
+      },
+      "name": "Upload a file",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ],
+      "id": "s3-up-s3up",
+      "credentials": {
+        "s3": {
+          "id": "{{S3_CRED_ID}}",
+          "name": "Timeweb S3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify([{ file_url: $(\"Convert to Binary\").first().json.s3_url }]) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        900,
+        300
+      ],
+      "id": "resp-ok-s3up"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Convert to Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to Binary": {
+      "main": [
+        [
+          {
+            "node": "Upload a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload a file": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "2b9b1b46-0bbd-444b-b7cb-87064e6c428c",
+  "versionCounter": 8,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-22T11:29:30.583Z",
+      "createdAt": "2026-02-22T11:29:30.583Z",
+      "role": "workflow:owner",
+      "workflowId": "kbXCIfMqXLu6K1yl",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-24T04:02:40.736Z",
+    "createdAt": "2026-02-24T04:02:40.736Z",
+    "versionId": "2b9b1b46-0bbd-444b-b7cb-87064e6c428c",
+    "workflowId": "kbXCIfMqXLu6K1yl",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "s3-upload",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          240,
+          300
+        ],
+        "id": "wh-s3up-new",
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $(\"Webhook\").first().json.body;\nconst base64Data = body.photo_base64;\nconst mimeType = body.mime_type || \"image/jpeg\";\nconst fileName = body.file_name || \"photo.jpg\";\n\nif (!base64Data) throw new Error(\"photo_base64 is required\");\n\nconst base64Clean = base64Data.includes(\",\")\n  ? base64Data.split(\",\")[1]\n  : base64Data;\n\nconst timestamp = Date.now();\nconst randomStr = Math.random().toString(36).substring(2, 8);\nconst ext = mimeType.includes(\"png\") ? \"png\" : (mimeType.includes(\"webp\") ? \"webp\" : \"jpg\");\nconst s3Filename = `uploads/${timestamp}_${randomStr}.${ext}`;\nconst s3Url = `https://avatar-bot-generations.s3.twcstorage.ru/${s3Filename}`;\n\nconst buffer = Buffer.from(base64Clean, \"base64\");\nconst binary = await this.helpers.prepareBinaryData(buffer, fileName, mimeType);\n\nreturn [{ json: { filename: s3Filename, s3_url: s3Url, mimeType }, binary: { data: binary } }];"
+        },
+        "name": "Convert to Binary",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          460,
+          300
+        ],
+        "id": "conv-bin-s3up"
+      },
+      {
+        "parameters": {
+          "operation": "upload",
+          "bucketName": "=avatar-bot-generations",
+          "fileName": "={{ $json.filename }}",
+          "binaryData": true,
+          "additionalFields": {
+            "contentType": "={{ $json.mimeType }}",
+            "cacheControl": "public, max-age=31536000"
+          },
+          "acl": "publicRead"
+        },
+        "name": "Upload a file",
+        "type": "n8n-nodes-base.s3",
+        "typeVersion": 1,
+        "position": [
+          680,
+          300
+        ],
+        "id": "s3-up-s3up",
+        "credentials": {
+          "s3": {
+            "id": "{{S3_CRED_ID}}",
+            "name": "Timeweb S3"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify([{ file_url: $(\"Convert to Binary\").first().json.s3_url }]) }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "name": "Respond Success",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          900,
+          300
+        ],
+        "id": "resp-ok-s3up"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Convert to Binary",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Convert to Binary": {
+        "main": [
+          [
+            {
+              "node": "Upload a file",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upload a file": {
+        "main": [
+          [
+            {
+              "node": "Respond Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T04:02:40.794Z",
+        "id": 2130,
+        "workflowId": "kbXCIfMqXLu6K1yl",
+        "versionId": "2b9b1b46-0bbd-444b-b7cb-87064e6c428c",
+        "event": "deactivated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      },
+      {
+        "createdAt": "2026-02-24T04:02:40.807Z",
+        "id": 2131,
+        "workflowId": "kbXCIfMqXLu6K1yl",
+        "versionId": "2b9b1b46-0bbd-444b-b7cb-87064e6c428c",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}

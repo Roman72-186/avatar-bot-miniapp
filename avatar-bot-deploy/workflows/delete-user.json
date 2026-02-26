@@ -1,0 +1,496 @@
+{
+  "name": "[MINIAPP] delete-user",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "delete-user",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "webhook",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nif (body.password !== '123hors456') {\n  return [{json: {error: 'access_denied', message: 'Invalid password'}}];\n}\nconst username = body.username || '';\nconst user_id = String(body.user_id || '').replace(/[^0-9]/g, '');\nif (!username && !user_id) {\n  return [{json: {error: 'invalid_input', message: 'Username or user_id required'}}];\n}\nreturn [{json: {username, user_id}}];"
+      },
+      "name": "Check Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "e685bc9f-2078-42dc-a2b8-91d2812dc28c"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=DELETE FROM generations WHERE user_id = '{{ $json.user_id }}';\nDELETE FROM user_topics WHERE user_id = (SELECT id FROM users WHERE id::text = '{{ $json.user_id }}');\nDELETE FROM users WHERE id::text = '{{ $json.user_id }}' RETURNING id as user_id, username;",
+        "options": {}
+      },
+      "name": "Delete User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "id": "e0767cc3-8adf-4190-81fe-6806346076fe",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $(\"Delete User\").all();\nconst last = items[items.length - 1];\nif (!last || !last.json.user_id) {\n  return [{json: {error: \"not_found\", message: \"User not found\"}}];\n}\nreturn [{json: {deleted: true, username: last.json.username || null, user_id: last.json.user_id}}];"
+      },
+      "name": "Build Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        0
+      ],
+      "id": "ed821281-b1de-459e-bd1c-df36add2411a"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if the original Code node returned a password/validation error\nconst codeOutput = $('Check Input').first()?.json;\nif (codeOutput?.error) {\n  return [{ json: { db_error: true, error_message: codeOutput.message || String(codeOutput.error) } }];\n}\n\nconst items = $input.all();\n\n// Check for Postgres error\nif (items.length > 0 && items[0].json.error) {\n  const errObj = items[0].json.error;\n  const errMsg = typeof errObj === 'string' ? errObj : (errObj.message || errObj.description || JSON.stringify(errObj).substring(0, 200));\n  return [{ json: { db_error: true, error_message: errMsg } }];\n}\n\n// Check for empty result (user not found - UPDATE/DELETE returned 0 rows)\nif (!items || items.length === 0 || (items.length === 1 && !items[0].json.username && !items[0].json.id && !items[0].json.user_id)) {\n  return [{ json: { db_error: true, error_message: \"not_found\" } }];\n}\n\n// Success\nreturn [{ json: { ...items[0].json, db_error: false } }];"
+      },
+      "id": "b5ecbd73-7c19-4fcc-b715-1324b243a85a",
+      "name": "Check Delete User Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        690,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "f9d86563-d6ec-474b-b692-1d3afe70b87b",
+              "leftValue": "={{ $json.db_error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "c724811e-dd45-44d6-8c0e-72b70dbff845",
+      "name": "DB OK? (Delete User)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        940,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error_message || \"operation_failed\", detail: $json.error_message }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "e02820ae-dc92-4408-9a13-9f6462d449de",
+      "name": "Respond Error (Delete User)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "ba2b478e-0665-4515-830b-0a1e9500bb2f",
+      "name": "Respond Success (Delete)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Input": {
+      "main": [
+        [
+          {
+            "node": "Delete User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete User": {
+      "main": [
+        [
+          {
+            "node": "Check Delete User Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Delete User Result": {
+      "main": [
+        [
+          {
+            "node": "DB OK? (Delete User)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB OK? (Delete User)": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error (Delete User)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success (Delete)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "d6f7a73e-eb35-4449-b2ea-0560d7cd8c3f",
+  "versionCounter": 56,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-14T18:54:17.017Z",
+      "createdAt": "2026-02-14T18:54:17.017Z",
+      "role": "workflow:owner",
+      "workflowId": "p6AeskFh67roLORQ",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-24T04:03:02.045Z",
+    "createdAt": "2026-02-24T04:03:02.045Z",
+    "versionId": "d6f7a73e-eb35-4449-b2ea-0560d7cd8c3f",
+    "workflowId": "p6AeskFh67roLORQ",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "delete-user",
+          "httpMethod": "POST",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "id": "webhook",
+        "webhookId": "delete-user",
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body || $input.first().json;\nif (body.password !== '123hors456') {\n  return [{json: {error: 'access_denied', message: 'Invalid password'}}];\n}\nconst username = body.username || '';\nconst user_id = String(body.user_id || '').replace(/[^0-9]/g, '');\nif (!username && !user_id) {\n  return [{json: {error: 'invalid_input', message: 'Username or user_id required'}}];\n}\nreturn [{json: {username, user_id}}];"
+        },
+        "name": "Check Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          0
+        ],
+        "id": "e685bc9f-2078-42dc-a2b8-91d2812dc28c"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=DELETE FROM generations WHERE user_id = '{{ $json.user_id }}';\nDELETE FROM user_topics WHERE user_id = (SELECT id FROM users WHERE id::text = '{{ $json.user_id }}');\nDELETE FROM users WHERE id::text = '{{ $json.user_id }}' RETURNING id as user_id, username;",
+          "options": {}
+        },
+        "name": "Delete User",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          440,
+          0
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "id": "e0767cc3-8adf-4190-81fe-6806346076fe",
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $(\"Delete User\").all();\nconst last = items[items.length - 1];\nif (!last || !last.json.user_id) {\n  return [{json: {error: \"not_found\", message: \"User not found\"}}];\n}\nreturn [{json: {deleted: true, username: last.json.username || null, user_id: last.json.user_id}}];"
+        },
+        "name": "Build Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          0
+        ],
+        "id": "ed821281-b1de-459e-bd1c-df36add2411a"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Check if the original Code node returned a password/validation error\nconst codeOutput = $('Check Input').first()?.json;\nif (codeOutput?.error) {\n  return [{ json: { db_error: true, error_message: codeOutput.message || String(codeOutput.error) } }];\n}\n\nconst items = $input.all();\n\n// Check for Postgres error\nif (items.length > 0 && items[0].json.error) {\n  const errObj = items[0].json.error;\n  const errMsg = typeof errObj === 'string' ? errObj : (errObj.message || errObj.description || JSON.stringify(errObj).substring(0, 200));\n  return [{ json: { db_error: true, error_message: errMsg } }];\n}\n\n// Check for empty result (user not found - UPDATE/DELETE returned 0 rows)\nif (!items || items.length === 0 || (items.length === 1 && !items[0].json.username && !items[0].json.id && !items[0].json.user_id)) {\n  return [{ json: { db_error: true, error_message: \"not_found\" } }];\n}\n\n// Success\nreturn [{ json: { ...items[0].json, db_error: false } }];"
+        },
+        "id": "b5ecbd73-7c19-4fcc-b715-1324b243a85a",
+        "name": "Check Delete User Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          690,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "f9d86563-d6ec-474b-b692-1d3afe70b87b",
+                "leftValue": "={{ $json.db_error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "false"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "c724811e-dd45-44d6-8c0e-72b70dbff845",
+        "name": "DB OK? (Delete User)",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          940,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: $json.error_message || \"operation_failed\", detail: $json.error_message }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "e02820ae-dc92-4408-9a13-9f6462d449de",
+        "name": "Respond Error (Delete User)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1240,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}"
+        },
+        "id": "ba2b478e-0665-4515-830b-0a1e9500bb2f",
+        "name": "Respond Success (Delete)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Check Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Input": {
+        "main": [
+          [
+            {
+              "node": "Delete User",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete User": {
+        "main": [
+          [
+            {
+              "node": "Check Delete User Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Delete User Result": {
+        "main": [
+          [
+            {
+              "node": "DB OK? (Delete User)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "DB OK? (Delete User)": {
+        "main": [
+          [
+            {
+              "node": "Build Response",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Error (Delete User)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Response": {
+        "main": [
+          [
+            {
+              "node": "Respond Success (Delete)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T04:03:02.084Z",
+        "id": 2140,
+        "workflowId": "p6AeskFh67roLORQ",
+        "versionId": "d6f7a73e-eb35-4449-b2ea-0560d7cd8c3f",
+        "event": "deactivated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      },
+      {
+        "createdAt": "2026-02-24T04:03:02.099Z",
+        "id": 2141,
+        "workflowId": "p6AeskFh67roLORQ",
+        "versionId": "d6f7a73e-eb35-4449-b2ea-0560d7cd8c3f",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}

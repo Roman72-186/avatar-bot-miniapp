@@ -1,0 +1,496 @@
+{
+  "name": "[MINIAPP] block-user",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "block-user",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "check",
+      "name": "Check Password",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst password = body.password;\nconst username = body.username || '';\nconst user_id = String(body.user_id || '').replace(/[^0-9]/g, '');\nconst blocked = (body.blocked === true || body.blocked === 'true');\n\nif (password !== '123hors456') {\n  return [{json: {error: 'access_denied', message: 'Invalid password'}}];\n}\n\nif ((!username && !user_id) || body.blocked === undefined) {\n  return [{json: {error: 'invalid_input', message: 'Username/user_id and blocked status required'}}];\n}\n\nreturn [{json: {username, user_id, blocked}}];"
+      }
+    },
+    {
+      "id": "update_blocked",
+      "name": "Update Blocked Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        650,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{POSTGRES_CRED_ID}}",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE users\nSET blocked = {{ $json.blocked ? 'TRUE' : 'FALSE' }}\nWHERE id::text = '{{ $json.user_id }}'\nRETURNING id, username, blocked;",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if the original Code node returned a password/validation error\nconst codeOutput = $('Check Password').first()?.json;\nif (codeOutput?.error) {\n  return [{ json: { db_error: true, error_message: codeOutput.message || String(codeOutput.error) } }];\n}\n\nconst items = $input.all();\n\n// Check for Postgres error\nif (items.length > 0 && items[0].json.error) {\n  const errObj = items[0].json.error;\n  const errMsg = typeof errObj === 'string' ? errObj : (errObj.message || errObj.description || JSON.stringify(errObj).substring(0, 200));\n  return [{ json: { db_error: true, error_message: errMsg } }];\n}\n\n// Check for empty result (user not found - UPDATE/DELETE returned 0 rows)\nif (!items || items.length === 0 || (items.length === 1 && !items[0].json.username && !items[0].json.id)) {\n  return [{ json: { db_error: true, error_message: \"not_found\" } }];\n}\n\n// Success\nreturn [{ json: { ...items[0].json, db_error: false } }];"
+      },
+      "id": "3d782ffb-9ff7-4e9d-871a-36800b949239",
+      "name": "Check Update Blocked Status Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "826eb763-6dcb-4996-8c3c-cef396326745",
+              "leftValue": "={{ $json.db_error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "253c1a77-600e-46d1-9403-2c7cb222074a",
+      "name": "DB OK? (Update Blocked Status)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1150,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error_message || \"operation_failed\", detail: $json.error_message }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "84b98b63-c658-4a9e-99cb-42e8d40a0d6c",
+      "name": "Respond Error (Update Blocked Status)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1450,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  username: data.username || null,\n  is_blocked: data.blocked,\n  user_id: data.id\n} }];"
+      },
+      "id": "1d89a153-48ac-4869-a403-38cb96faf129",
+      "name": "Build Block Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "953a70af-c28e-4449-a328-7e99a2317906",
+      "name": "Respond Success (Block)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1750,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Password": {
+      "main": [
+        [
+          {
+            "node": "Update Blocked Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Blocked Status": {
+      "main": [
+        [
+          {
+            "node": "Check Update Blocked Status Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Update Blocked Status Result": {
+      "main": [
+        [
+          {
+            "node": "DB OK? (Update Blocked Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB OK? (Update Blocked Status)": {
+      "main": [
+        [
+          {
+            "node": "Build Block Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error (Update Blocked Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Block Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success (Block)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "activeVersionId": "7c3ed001-749a-4d19-b0cc-34770f4f664a",
+  "versionCounter": 55,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-02-12T14:48:31.082Z",
+      "createdAt": "2026-02-12T14:48:31.082Z",
+      "role": "workflow:owner",
+      "workflowId": "KiYTLoH2eIPmE4aN",
+      "projectId": "UnFAqkOZkFc92cC9",
+      "project": {
+        "updatedAt": "2026-01-19T08:59:40.920Z",
+        "createdAt": "2026-01-19T07:34:37.219Z",
+        "id": "UnFAqkOZkFc92cC9",
+        "name": "Роман Махметов <2356592g@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-24T04:03:03.693Z",
+    "createdAt": "2026-02-24T04:03:03.693Z",
+    "versionId": "7c3ed001-749a-4d19-b0cc-34770f4f664a",
+    "workflowId": "KiYTLoH2eIPmE4aN",
+    "nodes": [
+      {
+        "id": "webhook",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          250,
+          300
+        ],
+        "webhookId": "block-user",
+        "parameters": {
+          "path": "block-user",
+          "httpMethod": "POST",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "check",
+        "name": "Check Password",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          450,
+          300
+        ],
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst password = body.password;\nconst username = body.username || '';\nconst user_id = String(body.user_id || '').replace(/[^0-9]/g, '');\nconst blocked = (body.blocked === true || body.blocked === 'true');\n\nif (password !== '123hors456') {\n  return [{json: {error: 'access_denied', message: 'Invalid password'}}];\n}\n\nif ((!username && !user_id) || body.blocked === undefined) {\n  return [{json: {error: 'invalid_input', message: 'Username/user_id and blocked status required'}}];\n}\n\nreturn [{json: {username, user_id, blocked}}];"
+        }
+      },
+      {
+        "id": "update_blocked",
+        "name": "Update Blocked Status",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          650,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "{{POSTGRES_CRED_ID}}",
+            "name": "avatar_bot"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=UPDATE users\nSET blocked = {{ $json.blocked ? 'TRUE' : 'FALSE' }}\nWHERE id::text = '{{ $json.user_id }}'\nRETURNING id, username, blocked;",
+          "options": {}
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Check if the original Code node returned a password/validation error\nconst codeOutput = $('Check Password').first()?.json;\nif (codeOutput?.error) {\n  return [{ json: { db_error: true, error_message: codeOutput.message || String(codeOutput.error) } }];\n}\n\nconst items = $input.all();\n\n// Check for Postgres error\nif (items.length > 0 && items[0].json.error) {\n  const errObj = items[0].json.error;\n  const errMsg = typeof errObj === 'string' ? errObj : (errObj.message || errObj.description || JSON.stringify(errObj).substring(0, 200));\n  return [{ json: { db_error: true, error_message: errMsg } }];\n}\n\n// Check for empty result (user not found - UPDATE/DELETE returned 0 rows)\nif (!items || items.length === 0 || (items.length === 1 && !items[0].json.username && !items[0].json.id)) {\n  return [{ json: { db_error: true, error_message: \"not_found\" } }];\n}\n\n// Success\nreturn [{ json: { ...items[0].json, db_error: false } }];"
+        },
+        "id": "3d782ffb-9ff7-4e9d-871a-36800b949239",
+        "name": "Check Update Blocked Status Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          900,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "826eb763-6dcb-4996-8c3c-cef396326745",
+                "leftValue": "={{ $json.db_error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "false"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "253c1a77-600e-46d1-9403-2c7cb222074a",
+        "name": "DB OK? (Update Blocked Status)",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1150,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ error: $json.error_message || \"operation_failed\", detail: $json.error_message }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "84b98b63-c658-4a9e-99cb-42e8d40a0d6c",
+        "name": "Respond Error (Update Blocked Status)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1450,
+          500
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  username: data.username || null,\n  is_blocked: data.blocked,\n  user_id: data.id\n} }];"
+        },
+        "id": "1d89a153-48ac-4869-a403-38cb96faf129",
+        "name": "Build Block Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1450,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}"
+        },
+        "id": "953a70af-c28e-4449-a328-7e99a2317906",
+        "name": "Respond Success (Block)",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1750,
+          200
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Check Password",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Password": {
+        "main": [
+          [
+            {
+              "node": "Update Blocked Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Update Blocked Status": {
+        "main": [
+          [
+            {
+              "node": "Check Update Blocked Status Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Update Blocked Status Result": {
+        "main": [
+          [
+            {
+              "node": "DB OK? (Update Blocked Status)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "DB OK? (Update Blocked Status)": {
+        "main": [
+          [
+            {
+              "node": "Build Block Response",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Error (Update Blocked Status)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Block Response": {
+        "main": [
+          [
+            {
+              "node": "Respond Success (Block)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Роман Махметов",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-24T04:03:03.728Z",
+        "id": 2142,
+        "workflowId": "KiYTLoH2eIPmE4aN",
+        "versionId": "7c3ed001-749a-4d19-b0cc-34770f4f664a",
+        "event": "deactivated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      },
+      {
+        "createdAt": "2026-02-24T04:03:03.747Z",
+        "id": 2143,
+        "workflowId": "KiYTLoH2eIPmE4aN",
+        "versionId": "7c3ed001-749a-4d19-b0cc-34770f4f664a",
+        "event": "activated",
+        "userId": "7b9f38f0-0dfe-404a-a677-ba540bbf50c1"
+      }
+    ]
+  }
+}
