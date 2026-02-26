@@ -2,6 +2,51 @@
 
 ## 2026-02-26
 
+### Фикс таймзоны schedule + история рассылок
+
+**1. Таймзона при планировании рассылки**
+- `<input type="datetime-local">` отдавал строку без таймзоны (`2026-02-26T21:40`), сохранялась as-is в БД — расхождение с `NOW()` сервера
+- **Фикс фронтенд**: `AdminPanel.jsx` — `new Date(bcSchedule).toISOString()` конвертирует в UTC перед отправкой
+- **Фикс n8n**: workflow `admin-broadcast` (`1ItmJTcUOGYnyfsE`) — нода "Save Broadcast" изменён каст `::timestamp` на `::timestamptz`
+
+**2. История рассылок в AdminPanel**
+- Новый n8n workflow `admin-broadcast-history` (`ukmt5GdHCuGCqKFS`): Webhook → Validate Password → Get History (SQL) → Respond
+- SQL: `SELECT id, status, filter_type, sent/failed/blocked_count, scheduled_at, completed_at, created_at, LEFT(message_text, 50) FROM broadcasts ORDER BY created_at DESC LIMIT 5`
+- `api.js`: новая функция `getBroadcastHistory(password)`
+- `AdminPanel.jsx`: при открытии "Рассылка" загружается история, показывается блок "Последние рассылки" — статус-иконка, превью текста, статистика sent/blocked/failed, дата
+- Deploy: `admin-broadcast-history.json` + обновлён `manifest.json`
+
+### Отложенный постинг (scheduled broadcast)
+
+Доделана система отложенных рассылок — теперь запланированные через AdminPanel рассылки автоматически отправляются в указанное время.
+
+**Что сделано:**
+- **Таблица `broadcasts`** — уже существовала в prod БД, добавлен индекс `idx_broadcasts_pending` для быстрого поиска pending рассылок
+- **Workflow `broadcast-scheduler`** (`HuERW5NEcaUaK8Lo`) — новый n8n workflow, Schedule Trigger каждые 60 сек:
+  - Проверяет `broadcasts` с `status='scheduled' AND scheduled_at <= NOW()`
+  - Атомарный захват: `UPDATE SET status='sending' WHERE status='scheduled' RETURNING id` — защита от дублей
+  - Строит filter clause по `filter_type` (all/has_balance/zero_balance/new_7d/new_24h)
+  - Рассылка: Get Recipients → Prepare Messages → Split In Batches → Send Telegram → Wait 40ms (rate limit)
+  - Collect Stats → Update broadcasts SET status='sent', sent_count, failed_count, blocked_count
+- **Deploy пакет обновлён:**
+  - `avatar-bot-deploy/db/01_schema.sql` — добавлена таблица `broadcasts`
+  - `avatar-bot-deploy/workflows/broadcast-scheduler.json` — новый файл
+  - `avatar-bot-deploy/workflows/manifest.json` — добавлен в import_order и activation_order
+- 2 старые тестовые рассылки (февраль) помечены как `expired`, broadcast #1 (2026-03-01) остался `scheduled`
+
+### Отчёт инициатору после отложенной рассылки
+
+После завершения отложенной рассылки инициатор (админ) получает Telegram-сообщение с отчётом: сколько доставлено, сколько заблокировали бота, сколько ошибок.
+
+**Что сделано:**
+- **БД**: добавлен столбец `created_by BIGINT` в таблицу `broadcasts` (prod + deploy schema)
+- **Фронтенд**: `AdminPanel.jsx` передаёт `adminUserId` при создании рассылки; `api.js` — поле `admin_user_id` в запросе
+- **Workflow `admin-broadcast`**: "Validate & Route" парсит `admin_user_id`, "Prepare Schedule" передаёт как `created_by`, "Save Broadcast" сохраняет в БД
+- **Workflow `broadcast-scheduler`**: "Build Filter Clause" читает `created_by` из broadcast; новый узел "Send Report" — после Update Broadcast шлёт Telegram-сообщение инициатору со статистикой
+- **Deploy пакет**: обновлены `broadcast-scheduler.json` (10 нод), `manifest.json`, `01_schema.sql`
+
+---
+
 ### Turnkey-деплой пакет для перепродажи (avatar-bot-deploy/)
 
 Создан полный deployment-пакет для развёртывания системы на свежем Ubuntu VPS одной командой.

@@ -94,3 +94,23 @@ BEGIN
         free_enhance = 1;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Scheduled broadcasts table
+CREATE TABLE IF NOT EXISTS broadcasts (
+    id              BIGSERIAL PRIMARY KEY,
+    message_text    TEXT NOT NULL,
+    photo_url       TEXT,
+    buttons         JSONB DEFAULT '[]'::jsonb,
+    filter_type     VARCHAR(50) DEFAULT 'all',
+    scheduled_at    TIMESTAMPTZ,
+    status          VARCHAR(20) DEFAULT 'scheduled',
+    sent_count      INT DEFAULT 0,
+    failed_count    INT DEFAULT 0,
+    blocked_count   INT DEFAULT 0,
+    created_by      BIGINT,                         -- admin user_id who created
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    completed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_broadcasts_pending
+    ON broadcasts(scheduled_at) WHERE status = 'scheduled';

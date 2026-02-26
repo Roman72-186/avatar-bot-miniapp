@@ -135,6 +135,18 @@
       "nodes_count": 19
     },
     {
+      "filename": "admin-broadcast-history.json",
+      "original_name": "[MINIAPP] admin-broadcast-history",
+      "original_id": "ukmt5GdHCuGCqKFS",
+      "nodes_count": 6
+    },
+    {
+      "filename": "broadcast-scheduler.json",
+      "original_name": "[MINIAPP] broadcast-scheduler",
+      "original_id": "HuERW5NEcaUaK8Lo",
+      "nodes_count": 10
+    },
+    {
       "filename": "bot-start-handler.json",
       "original_name": "[DEV] [MINIAPP] bot-start-handler",
       "original_id": "Z8oemCWVXaK6qJPQ",
@@ -164,6 +176,8 @@
     "delete-user.json",
     "admin-broadcast-preview.json",
     "admin-broadcast.json",
+    "admin-broadcast-history.json",
+    "broadcast-scheduler.json",
     "bot-start-handler.json"
   ],
   "activation_order": [
@@ -189,6 +203,8 @@
     "delete-user.json",
     "admin-broadcast-preview.json",
     "admin-broadcast.json",
+    "admin-broadcast-history.json",
+    "broadcast-scheduler.json",
     "bot-start-handler.json"
   ]
 }

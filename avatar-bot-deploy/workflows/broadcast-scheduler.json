@@ -1,0 +1,222 @@
+{
+  "name": "[MINIAPP] broadcast-scheduler",
+  "nodes": [
+    {
+      "id": "sched-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get-pending",
+      "name": "Get Pending Broadcasts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [500, 300],
+      "credentials": {
+        "postgres": {
+          "id": "UirFNzTALE9CZEcQ",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM broadcasts WHERE status = 'scheduled' AND scheduled_at <= NOW() ORDER BY scheduled_at LIMIT 1;",
+        "options": {}
+      }
+    },
+    {
+      "id": "has-broadcasts",
+      "name": "Has Broadcasts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [740, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c-has",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "mark-sending",
+      "name": "Mark In Progress",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [980, 200],
+      "credentials": {
+        "postgres": {
+          "id": "UirFNzTALE9CZEcQ",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE broadcasts SET status = 'sending' WHERE id = {{ $json.id }} AND status = 'scheduled' RETURNING id;",
+        "options": {}
+      }
+    },
+    {
+      "id": "lock-check",
+      "name": "Got Lock?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1220, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c-lock",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "build-filter",
+      "name": "Build Filter Clause",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, 200],
+      "parameters": {
+        "jsCode": "const broadcast = $('Get Pending Broadcasts').first().json;\n\nlet filterClause = '';\nswitch (broadcast.filter_type) {\n  case 'has_balance':\n    filterClause = 'AND star_balance > 0'; break;\n  case 'zero_balance':\n    filterClause = 'AND star_balance = 0'; break;\n  case 'new_7d':\n    filterClause = \"AND created_at > NOW() - INTERVAL '7 days'\"; break;\n  case 'new_24h':\n    filterClause = \"AND created_at > NOW() - INTERVAL '24 hours'\"; break;\n}\n\nlet buttons = broadcast.buttons || [];\nif (typeof buttons === 'string') {\n  try { buttons = JSON.parse(buttons); } catch(e) { buttons = []; }\n}\n\nlet replyMarkup = null;\nif (buttons.length > 0) {\n  replyMarkup = {\n    inline_keyboard: buttons.map(btn => [{text: btn.text, url: btn.url}])\n  };\n}\n\nreturn [{json: {\n  broadcast_id: broadcast.id,\n  message_text: broadcast.message_text,\n  photo_url: broadcast.photo_url,\n  buttons,\n  reply_markup: replyMarkup,\n  filter_type: broadcast.filter_type,\n  filter_clause: filterClause,\n  created_by: broadcast.created_by || null,\n}}];\n"
+      }
+    },
+    {
+      "id": "get-recipients",
+      "name": "Get Recipients",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1700, 200],
+      "credentials": {
+        "postgres": {
+          "id": "UirFNzTALE9CZEcQ",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT id FROM users WHERE blocked = false {{ $('Build Filter Clause').first().json.filter_clause }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "send-all",
+      "name": "Send & Collect Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1940, 200],
+      "parameters": {
+        "jsCode": "const bc = $('Build Filter Clause').first().json;\nconst users = $input.all().map(item => item.json);\n\nconst botToken = '6939723174:AAE59AdG4oigMzBmWQQmxbUiidm562T_Fnc';\nconst baseUrl = `https://api.telegram.org/bot${botToken}`;\n\nlet sent = 0, failed = 0, blocked = 0;\n\nfor (const user of users) {\n  const chatId = user.id;\n  if (!chatId) continue;\n\n  let apiMethod, body;\n  if (bc.photo_url) {\n    apiMethod = 'sendPhoto';\n    body = { chat_id: chatId, photo: bc.photo_url, caption: bc.message_text, parse_mode: 'HTML' };\n  } else {\n    apiMethod = 'sendMessage';\n    body = { chat_id: chatId, text: bc.message_text, parse_mode: 'HTML' };\n  }\n\n  if (bc.reply_markup) {\n    body.reply_markup = JSON.stringify(bc.reply_markup);\n  }\n\n  try {\n    const result = await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${baseUrl}/${apiMethod}`,\n      body,\n      json: true,\n      timeout: 10000,\n    });\n    if (result.ok) {\n      sent++;\n    } else if (result.error_code === 403) {\n      blocked++;\n    } else {\n      failed++;\n    }\n  } catch (e) {\n    const msg = e.message || '';\n    if (msg.includes('403')) {\n      blocked++;\n    } else {\n      failed++;\n    }\n  }\n\n  await new Promise(r => setTimeout(r, 40));\n}\n\nreturn [{json: {\n  broadcast_id: bc.broadcast_id,\n  sent_count: sent,\n  failed_count: failed,\n  blocked_count: blocked,\n  total: sent + failed + blocked,\n}}];\n"
+      }
+    },
+    {
+      "id": "update-broadcast",
+      "name": "Update Broadcast",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2180, 200],
+      "credentials": {
+        "postgres": {
+          "id": "UirFNzTALE9CZEcQ",
+          "name": "avatar_bot"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE broadcasts SET status = 'sent', sent_count = {{ $json.sent_count }}, failed_count = {{ $json.failed_count }}, blocked_count = {{ $json.blocked_count }}, completed_at = NOW() WHERE id = {{ $json.broadcast_id }};",
+        "options": {}
+      }
+    },
+    {
+      "id": "send-report",
+      "name": "Send Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 200],
+      "parameters": {
+        "jsCode": "const stats = $('Send & Collect Stats').first().json;\nconst bc = $('Build Filter Clause').first().json;\nconst createdBy = bc.created_by;\n\nif (!createdBy) {\n  return [{json: {report: 'skipped', reason: 'no created_by'}}];\n}\n\nconst botToken = '6939723174:AAE59AdG4oigMzBmWQQmxbUiidm562T_Fnc';\nconst text = `\\u2709\\ufe0f \\u041e\\u0442\\u0447\\u0451\\u0442 \\u043f\\u043e \\u0440\\u0430\\u0441\\u0441\\u044b\\u043b\\u043a\\u0435 #${stats.broadcast_id}\\n\\n\\u2705 \\u0414\\u043e\\u0441\\u0442\\u0430\\u0432\\u043b\\u0435\\u043d\\u043e: ${stats.sent_count}\\n\\u26d4 \\u0417\\u0430\\u0431\\u043b\\u043e\\u043a\\u0438\\u0440\\u043e\\u0432\\u0430\\u043b\\u0438: ${stats.blocked_count}\\n\\u274c \\u041e\\u0448\\u0438\\u0431\\u043a\\u0438: ${stats.failed_count}\\n\\u0412\\u0441\\u0435\\u0433\\u043e: ${stats.total}`;\n\ntry {\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: `https://api.telegram.org/bot${botToken}/sendMessage`,\n    body: { chat_id: createdBy, text, parse_mode: 'HTML' },\n    json: true,\n    timeout: 10000,\n  });\n  return [{json: {report: 'sent', chat_id: createdBy}}];\n} catch (e) {\n  return [{json: {report: 'failed', error: e.message}}];\n}\n"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{"node": "Get Pending Broadcasts", "type": "main", "index": 0}]]
+    },
+    "Get Pending Broadcasts": {
+      "main": [[{"node": "Has Broadcasts?", "type": "main", "index": 0}]]
+    },
+    "Has Broadcasts?": {
+      "main": [
+        [{"node": "Mark In Progress", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Mark In Progress": {
+      "main": [[{"node": "Got Lock?", "type": "main", "index": 0}]]
+    },
+    "Got Lock?": {
+      "main": [
+        [{"node": "Build Filter Clause", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Build Filter Clause": {
+      "main": [[{"node": "Get Recipients", "type": "main", "index": 0}]]
+    },
+    "Get Recipients": {
+      "main": [[{"node": "Send & Collect Stats", "type": "main", "index": 0}]]
+    },
+    "Send & Collect Stats": {
+      "main": [[{"node": "Update Broadcast", "type": "main", "index": 0}]]
+    },
+    "Update Broadcast": {
+      "main": [[{"node": "Send Report", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

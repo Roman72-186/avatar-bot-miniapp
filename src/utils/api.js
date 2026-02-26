@@ -132,7 +132,7 @@ async function uploadToS3(file) {
   const timer = setTimeout(() => controller.abort(), 15000); // 15 сек таймаут
 
   try {
-    const response = await fetch('https://n8n.creativeanalytic.ru/s3-upload/upload-photo', {
+    const response = await fetch(`${API_BASE}/s3-upload/upload-photo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -512,7 +512,7 @@ async function uploadAudioToS3(file) {
   const timer = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const response = await fetch('https://n8n.creativeanalytic.ru/s3-upload/upload-photo', {
+    const response = await fetch(`${API_BASE}/s3-upload/upload-photo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -656,8 +656,13 @@ export async function broadcastPreview(password, filterType) {
   return apiRequest('admin-broadcast-preview', { password, filter_type: filterType || 'all' }, 15000, 0);
 }
 
+// Broadcast: history (last 5)
+export async function getBroadcastHistory(password) {
+  return apiRequest('admin-broadcast-history', { password }, 15000, 0);
+}
+
 // Broadcast: send or schedule
-export async function broadcastSend(password, { messageText, photoUrl, buttons, filterType, testUserId, scheduleAt }) {
+export async function broadcastSend(password, { messageText, photoUrl, buttons, filterType, testUserId, scheduleAt, adminUserId }) {
   return apiRequest('admin-broadcast', {
     password,
     message_text: messageText,
@@ -666,6 +671,7 @@ export async function broadcastSend(password, { messageText, photoUrl, buttons, 
     filter_type: filterType || 'all',
     test_user_id: testUserId || undefined,
     schedule_at: scheduleAt || undefined,
+    admin_user_id: adminUserId || undefined,
   }, 300000, 0);
 }
 
