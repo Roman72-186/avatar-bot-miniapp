@@ -92,6 +92,7 @@ export default function App() {
   const [styleResolution, setStyleResolution] = useState('2K');
   const [selectedTheme, setSelectedTheme] = useState(null);
   const [insufficientMsg, setInsufficientMsg] = useState(null);
+  const [statusLoadFailed, setStatusLoadFailed] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -198,6 +199,7 @@ export default function App() {
       }
 
       setIsBlocked(false);
+      setStatusLoadFailed(false);
       const newFreeGens = {
         free_stylize: status.free_stylize ?? 0,
         free_remove_bg: status.free_remove_bg ?? 0,
@@ -213,7 +215,9 @@ export default function App() {
       } catch {}
     } catch (e) {
       console.error('Failed to load user status:', e);
-      setFreeGens({ free_stylize: 1, free_remove_bg: 1, free_enhance: 1 });
+      // Не подставляем фейковый баланс — если кеша нет, freeGens останется null
+      // и UI покажет "..." вместо ложных бесплатных генераций
+      setStatusLoadFailed(true);
     }
   };
 
@@ -482,8 +486,8 @@ export default function App() {
     // Keep mode selection
   };
 
-  // URL with prompt examples (replace with actual link)
-  const PROMPT_EXAMPLES_URL = 'https://www.localbanana.io/';
+  // Примеры промптов — пока нет реальной страницы, кнопка скрыта (examplesUrl не передаётся)
+  // const PROMPT_EXAMPLES_URL = null;
 
   // Button label per mode
   const buttonLabels = {
@@ -497,6 +501,21 @@ export default function App() {
     text_to_image: '\ud83d\udcac Создать',
     photosession: '\ud83d\udcf8 Запустить фотосессию',
   };
+
+  // Если нет userId — приложение открыто вне Telegram
+  if (!userId) {
+    return (
+      <div className="app">
+        <div className="bg-gradient"></div>
+        <div className="bg-noise"></div>
+        <div className="error-screen">
+          <div className="error-icon">📱</div>
+          <h2>Откройте через Telegram</h2>
+          <p>Это приложение работает только внутри Telegram. Откройте бота и нажмите кнопку меню.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -527,11 +546,7 @@ export default function App() {
           <div className="error-icon">😔</div>
           <h2>Ошибка</h2>
           <p>{error}</p>
-          {errorDetails && (
-            <div style={{ fontSize: '11px', color: 'var(--text-hint)', marginTop: '10px', padding: '10px', background: 'var(--bg-secondary)', borderRadius: '8px', wordBreak: 'break-word', fontFamily: 'monospace' }}>
-              {errorDetails}
-            </div>
-          )}
+          {/* errorDetails скрыт от пользователя — логируется только в console */}
           <button className="action-btn primary" onClick={() => { setScreen(SCREENS.MAIN); setError(null); setErrorDetails(null); }}>
             Попробовать снова
           </button>
@@ -569,6 +584,13 @@ export default function App() {
             starBalance={starBalance}
             modeId={mode}
           />
+
+          {statusLoadFailed && !freeGens && (
+            <div className="insufficient-balance-msg" onClick={() => { setStatusLoadFailed(false); loadUserStatus(); }} style={{ cursor: 'pointer' }}>
+              <span className="insufficient-icon">⚠️</span>
+              <span>Не удалось загрузить данные. Нажмите, чтобы повторить.</span>
+            </div>
+          )}
 
           {insufficientMsg && (
             <div className="insufficient-balance-msg">
@@ -618,7 +640,6 @@ export default function App() {
                 value={promptText}
                 onChange={setPromptText}
                 placeholder="Опишите, как объединить фото... Например: объедини лица с фото 1 и 2 в стиле киберпанк"
-                examplesUrl={PROMPT_EXAMPLES_URL}
               />
             </>
           )}
@@ -632,7 +653,6 @@ export default function App() {
                 promptText={promptText}
                 onPromptChange={setPromptText}
                 promptPlaceholder="Опишите желаемый стиль или результат..."
-                examplesUrl={PROMPT_EXAMPLES_URL}
               />
               {photos.filter(Boolean).length >= 2 && (
                 <ResolutionSelector
@@ -657,8 +677,7 @@ export default function App() {
                     value={promptText}
                     onChange={setPromptText}
                     placeholder="Опишите желаемое движение... Например: человек поворачивает голову и улыбается"
-                    examplesUrl={PROMPT_EXAMPLES_URL}
-                  />
+                      />
                   <DurationSelector
                     selectedDuration={videoDuration}
                     onDurationSelect={setVideoDuration}
@@ -754,8 +773,7 @@ export default function App() {
                     value={promptText}
                     onChange={setPromptText}
                     placeholder="Опишите выражение лица (необязательно)... Например: улыбается, смотрит в камеру"
-                    examplesUrl={PROMPT_EXAMPLES_URL}
-                  />
+                      />
                 </>
               )}
             </>
@@ -786,7 +804,6 @@ export default function App() {
               onChange={setPromptText}
               placeholder="Опишите изображение... Например: космонавт верхом на лошади в стиле ренессанс"
               maxLength={1000}
-              examplesUrl={PROMPT_EXAMPLES_URL}
             />
           )}
 
