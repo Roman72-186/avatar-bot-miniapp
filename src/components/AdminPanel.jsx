@@ -329,7 +329,12 @@ export default function AdminPanel({ adminPassword, onClose }) {
 
           {/* Schedule */}
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '12px', color: 'var(--text-hint)', marginBottom: '6px' }}>Отложенная отправка</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-hint)', marginBottom: '6px' }}>
+              Отложенная отправка
+              <span style={{ marginLeft: '6px', opacity: 0.6 }}>
+                ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+              </span>
+            </div>
             <input
               type="datetime-local"
               className="admin-input"
