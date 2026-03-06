@@ -170,7 +170,9 @@
       "Bash(ssh server-main:*)",
       "Bash(echo === Workflow: $wf_id ===:*)",
       "Bash(\"/c/Users/User/AppData/Local/Programs/Python/Python314/python.exe\":*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "WebFetch(domain:docs.together.ai)",
+      "WebFetch(domain:docs.bfl.ml)"
     ]
   },
   "enableAllProjectMcpServers": true,

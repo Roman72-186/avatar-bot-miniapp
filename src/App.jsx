@@ -379,7 +379,7 @@ export default function App() {
           result = await generateRemoveBg(userId, photoFile, initData);
           break;
         case 'enhance':
-          result = await generateEnhance(userId, photoFile, initData);
+          result = await generateEnhance(userId, photoFile, promptText, initData);
           break;
         case 'text_to_image':
           result = await generateTextToImage(userId, promptText, initData);
@@ -790,11 +790,21 @@ export default function App() {
 
           {/* Enhance mode */}
           {mode === 'enhance' && (
-            <PhotoUpload
-              onPhotoSelected={handlePhotoSelected}
-              uploadTitle="Загрузи фото для улучшения"
-              uploadHint="AI увеличит разрешение и улучшит качество любого фото"
-            />
+            <>
+              <PhotoUpload
+                onPhotoSelected={handlePhotoSelected}
+                uploadTitle="Загрузи фото для улучшения"
+                uploadHint="AI увеличит разрешение и улучшит качество любого фото"
+              />
+              {photoFile && (
+                <PromptInput
+                  value={promptText}
+                  onChange={setPromptText}
+                  placeholder="Что улучшить? Например: убери шум, повысь резкость, сделай ярче..."
+                  maxLength={500}
+                />
+              )}
+            </>
           )}
 
           {/* Text to image mode */}

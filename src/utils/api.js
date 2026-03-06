@@ -566,7 +566,7 @@ export async function generateRemoveBg(userId, file, initData, onStep) {
 }
 
 // Enhance / Upscale (base64 напрямую — n8n загружает на S3)
-export async function generateEnhance(userId, file, initData, onStep) {
+export async function generateEnhance(userId, file, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
     step('[1/2] Подготовка фото...');
@@ -582,6 +582,9 @@ export async function generateEnhance(userId, file, initData, onStep) {
       mime_type: compressed.type || 'image/jpeg',
       init_data: initData,
     };
+    if (prompt && prompt.trim().length > 0) {
+      requestData.prompt = prompt.trim();
+    }
     return await apiRequest('generate-enhance', requestData, 120000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
