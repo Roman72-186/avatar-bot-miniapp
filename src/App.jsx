@@ -204,6 +204,7 @@ export default function App() {
         free_stylize: status.free_stylize ?? 0,
         free_remove_bg: status.free_remove_bg ?? 0,
         free_enhance: status.free_enhance ?? 0,
+        free_text_to_image: status.free_text_to_image ?? 0,
       };
       const newBalance = status.star_balance || 0;
       setFreeGens(newFreeGens);
