@@ -25,15 +25,15 @@
 
 | Окружение | VITE_API_BASE | Пример запроса |
 |---|---|---|
-| **Production** (main) | `https://n8n.creativeanalytic.ru/webhook` | `/webhook/generate` |
-| **Preview** (ветки) | `https://n8n.creativeanalytic.ru/webhook/dev` | `/webhook/dev/generate` |
-| **Local dev** | `https://n8n.creativeanalytic.ru/webhook/dev` | `/webhook/dev/generate` |
+| **Production** (main) | `https://n8n.creativeanalytic.ru:8443/webhook` | `/webhook/generate` |
+| **Preview** (ветки) | `https://n8n.creativeanalytic.ru:8443/webhook/dev` | `/webhook/dev/generate` |
+| **Local dev** | `https://n8n.creativeanalytic.ru:8443/webhook` | `/webhook/generate` |
 
 Настройка через Vercel Environment Variables:
-- **Production**: `VITE_API_BASE=https://n8n.creativeanalytic.ru/webhook`
-- **Preview**: `VITE_API_BASE=https://n8n.creativeanalytic.ru/webhook/dev`
+- **Production**: `VITE_API_BASE=https://n8n.creativeanalytic.ru:8443/webhook`
+- **Preview**: `VITE_API_BASE=https://n8n.creativeanalytic.ru:8443/webhook/dev`
 
-Локально: файл `.env.development` уже содержит dev URL.
+Локально: файл `.env.development` сейчас направлен на рабочий production webhook, чтобы MVP можно было проверять без DEV-копий workflow.
 
 ## Workflow разработки
 
