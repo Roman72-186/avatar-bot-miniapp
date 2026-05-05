@@ -1,6 +1,13 @@
 import { useRef } from 'react';
 
-export default function MultiPhotoUpload({ photos, onPhotosChanged, minPhotos = 2, maxPhotos = 4 }) {
+export default function MultiPhotoUpload({
+  photos,
+  onPhotosChanged,
+  minPhotos = 2,
+  maxPhotos = 4,
+  label,
+  hint,
+}) {
   const inputRefs = useRef([]);
 
   const handleFile = (index, file) => {
@@ -32,10 +39,11 @@ export default function MultiPhotoUpload({ photos, onPhotosChanged, minPhotos = 
   return (
     <div className="multi-photo-upload">
       <div className="multi-photo-label">
-        {filledCount < minPhotos
-          ? `\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u043c\u0438\u043d\u0438\u043c\u0443\u043c ${minPhotos} \u0444\u043e\u0442\u043e`
-          : `\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u043e ${filledCount} \u0438\u0437 ${maxPhotos}`}
+        {label || (filledCount < minPhotos
+          ? `Загрузите минимум ${minPhotos} фото`
+          : `Загружено ${filledCount} из ${maxPhotos}`)}
       </div>
+      {hint && <div className="multi-photo-hint">{hint}</div>}
       <div className="photo-grid">
         {Array.from({ length: slotsToShow }).map((_, i) => {
           const photo = photos[i];

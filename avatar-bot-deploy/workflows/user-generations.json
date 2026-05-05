@@ -38,7 +38,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "=SELECT id, mode, result_type, result_url, prompt, created_at FROM generations WHERE user_id = '{{ .body.user_id }}' AND created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 50;",
+        "query": "=SELECT id, mode, result_type, result_url, prompt, metadata, created_at FROM generations WHERE user_id = '{{ .body.user_id }}' AND created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 50;",
         "options": {}
       },
       "alwaysOutputData": true,
@@ -270,7 +270,7 @@
         },
         "parameters": {
           "operation": "executeQuery",
-          "query": "=SELECT id, mode, result_type, result_url, prompt, created_at FROM generations WHERE user_id = '{{ .body.user_id }}' AND created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 50;",
+          "query": "=SELECT id, mode, result_type, result_url, prompt, metadata, created_at FROM generations WHERE user_id = '{{ .body.user_id }}' AND created_at > NOW() - INTERVAL '24 hours' ORDER BY created_at DESC LIMIT 50;",
           "options": {}
         },
         "alwaysOutputData": true,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getAdminStats, addStarsByUsername, blockUser, deleteUser, broadcastPreview, broadcastSend } from '../utils/api';
+import { getAdminStats, addStarsByUsername, blockUser, deleteUser, broadcastPreview, broadcastSend, getBroadcastHistory } from '../utils/api';
 import { useTelegram } from '../hooks/useTelegram';
 
 export default function AdminPanel({ adminPassword, onClose }) {
@@ -26,6 +26,8 @@ export default function AdminPanel({ adminPassword, onClose }) {
   const [bcCountLoading, setBcCountLoading] = useState(false);
   const [bcSending, setBcSending] = useState(false);
   const [bcResult, setBcResult] = useState(null);
+  const [bcHistory, setBcHistory] = useState([]);
+  const [bcHistoryLoading, setBcHistoryLoading] = useState(false);
 
   const loadRecipientCount = useCallback(async (filter) => {
     setBcCountLoading(true);
@@ -41,6 +43,19 @@ export default function AdminPanel({ adminPassword, onClose }) {
     if (showBroadcast) loadRecipientCount(bcFilter);
   }, [showBroadcast, bcFilter, loadRecipientCount]);
 
+  useEffect(() => {
+    if (showBroadcast) {
+      setBcHistoryLoading(true);
+      getBroadcastHistory(adminPassword)
+        .then(res => {
+          const data = Array.isArray(res) ? res : res ? [res] : [];
+          setBcHistory(data);
+        })
+        .catch(() => setBcHistory([]))
+        .finally(() => setBcHistoryLoading(false));
+    }
+  }, [showBroadcast, adminPassword]);
+
   const handleBroadcastSend = async (testMode = false) => {
     if (!bcText.trim()) return;
     setBcSending(true);
@@ -52,7 +67,8 @@ export default function AdminPanel({ adminPassword, onClose }) {
         buttons: bcButtons.filter(b => b.text && b.url),
         filterType: bcFilter,
         testUserId: testMode ? String(userId) : undefined,
-        scheduleAt: !testMode && bcSchedule ? bcSchedule : undefined,
+        scheduleAt: !testMode && bcSchedule ? new Date(bcSchedule).toISOString() : undefined,
+        adminUserId: String(userId),
       });
       const data = Array.isArray(res) ? res[0] : res;
       setBcResult(data);
@@ -207,6 +223,39 @@ export default function AdminPanel({ adminPassword, onClose }) {
             <span style={{ fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 600 }}>Рассылка</span>
           </div>
 
+          {/* Broadcast History */}
+          {bcHistoryLoading ? (
+            <div style={{ fontSize: '12px', color: 'var(--text-hint)', padding: '8px 0' }}>Загрузка истории...</div>
+          ) : bcHistory.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-hint)', marginBottom: '6px' }}>Последние рассылки</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {bcHistory.map((b) => {
+                  const status = b.status === 'sent' ? '\u2705' : b.status === 'scheduled' ? '\u23f3' : b.status === 'sending' ? '\ud83d\udce4' : '\u274c';
+                  const preview = (b.message_preview || b.message_text || '').slice(0, 50);
+                  const date = b.completed_at || b.scheduled_at || b.created_at;
+                  const dateStr = date ? new Date(date).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                  return (
+                    <div key={b.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '6px 8px', background: 'var(--card-bg)', borderRadius: '8px',
+                      border: '1px solid var(--card-border)', fontSize: '12px',
+                    }}>
+                      <span style={{ fontSize: '14px', flexShrink: 0 }}>{status}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                        {preview}
+                      </span>
+                      <span style={{ color: 'var(--accent)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        {b.sent_count || 0}/{b.blocked_count || 0}/{b.failed_count || 0}
+                      </span>
+                      <span style={{ color: 'var(--text-hint)', flexShrink: 0, fontSize: '11px' }}>{dateStr}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Message text */}
           <textarea
             className="admin-input"
@@ -280,7 +329,12 @@ export default function AdminPanel({ adminPassword, onClose }) {
 
           {/* Schedule */}
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '12px', color: 'var(--text-hint)', marginBottom: '6px' }}>Отложенная отправка</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-hint)', marginBottom: '6px' }}>
+              Отложенная отправка
+              <span style={{ marginLeft: '6px', opacity: 0.6 }}>
+                ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+              </span>
+            </div>
             <input
               type="datetime-local"
               className="admin-input"
@@ -394,7 +448,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
             </div>
             <div className="admin-detail-row">
               <span style={{ color: 'var(--text-hint)' }}>Баланс</span>
-              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{selectedUser.star_balance} ⭐</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{selectedUser.star_balance} кредитов</span>
             </div>
           </div>
 
@@ -417,7 +471,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
             <div style={{ marginBottom: '16px' }}>
               <input
                 type="number"
-                placeholder="Количество звёзд"
+                placeholder="Количество кредитов"
                 value={actionAmount}
                 onChange={(e) => setActionAmount(e.target.value)}
                 className="admin-input"
@@ -429,8 +483,8 @@ export default function AdminPanel({ adminPassword, onClose }) {
                 style={{ width: '100%', padding: '12px', fontSize: '14px' }}
               >
                 {actionLoading ? 'Обработка...'
-                  : actionType === 'credit' ? `Начислить ${actionAmount || '...'} ⭐`
-                  : `Снять ${actionAmount || '...'} ⭐`}
+                  : actionType === 'credit' ? `Начислить ${actionAmount || '...'} кредитов`
+                  : `Снять ${actionAmount || '...'} кредитов`}
               </button>
             </div>
           )}
@@ -505,8 +559,8 @@ export default function AdminPanel({ adminPassword, onClose }) {
                 <div className="admin-stat-label">Новых за 7д</div>
               </div>
               <div className="admin-stat-card wide">
-                <div className="admin-stat-value">{stats.total_star_balance} ⭐</div>
-                <div className="admin-stat-label">Общий баланс звёзд</div>
+                <div className="admin-stat-value">{stats.total_star_balance} кредитов</div>
+                <div className="admin-stat-label">Общий баланс кредитов</div>
               </div>
             </div>
 
@@ -538,7 +592,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
                     >
                       <span className="admin-user-status">{user.blocked ? '🔴' : '🟢'}</span>
                       <span className="admin-user-name">{user.username || user.user_id}</span>
-                      <span className="admin-user-balance">{user.star_balance} ⭐</span>
+                      <span className="admin-user-balance">{user.star_balance} кредитов</span>
                       <span style={{ color: 'var(--text-hint)', fontSize: '14px' }}>›</span>
                     </div>
                   ))}

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 
-export default function PhotoUpload({ onPhotoSelected, uploadTitle, uploadHint }) {
+export default function PhotoUpload({ onPhotoSelected, uploadTitle, uploadHint, cameraCapture = 'environment' }) {
   const [preview, setPreview] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const galleryRef = useRef(null);
@@ -55,8 +55,8 @@ export default function PhotoUpload({ onPhotoSelected, uploadTitle, uploadHint }
           onDrop={handleDrop}
         >
           <div className="upload-icon">📸</div>
-          <div className="upload-title">{uploadTitle || 'Загрузи своё фото'}</div>
-          <div className="upload-hint">{uploadHint || 'Лучше всего работает с портретным фото лица крупным планом'}</div>
+          <div className="upload-title">{uploadTitle || 'Загрузите фото квартиры'}</div>
+          <div className="upload-hint">{uploadHint || 'Лучше использовать реальные светлые фото без сильного размытия'}</div>
 
           <div className="upload-buttons">
             <button
@@ -92,7 +92,7 @@ export default function PhotoUpload({ onPhotoSelected, uploadTitle, uploadHint }
             ref={cameraRef}
             type="file"
             accept="image/*"
-            capture="user"
+            capture={cameraCapture}
             onChange={handleInputChange}
             style={{ display: 'none' }}
           />

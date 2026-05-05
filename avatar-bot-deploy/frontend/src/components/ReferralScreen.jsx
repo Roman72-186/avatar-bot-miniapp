@@ -86,11 +86,11 @@ export default function ReferralScreen({ userId, initData, onBack, onInvite }) {
             </div>
             <div className="ref-stat-card accent">
               <div className="ref-stat-value">{totalEarnings}</div>
-              <div className="ref-stat-label">Заработано ⭐</div>
+              <div className="ref-stat-label">Заработано кредитов</div>
             </div>
             <div className="ref-stat-card">
               <div className="ref-stat-value">{structureTurnover}</div>
-              <div className="ref-stat-label">Оборот ⭐</div>
+              <div className="ref-stat-label">Оборот кредитов</div>
             </div>
           </div>
 
@@ -98,7 +98,7 @@ export default function ReferralScreen({ userId, initData, onBack, onInvite }) {
           <div className="referral-info-card">
             <h3>Ставки комиссий</h3>
             <p className="ref-info-desc">
-              Вы получаете процент от каждой траты Stars вашими партнёрами — до 5 уровней глубины.
+              Вы получаете процент от каждой платной траты кредитов вашими партнёрами — до 5 уровней глубины.
             </p>
             <div className="tier-table">
               {LEVELS.map(({ level, rate }) => (
@@ -122,7 +122,7 @@ export default function ReferralScreen({ userId, initData, onBack, onInvite }) {
                   <div key={level} className={`ref-level-row ${count > 0 ? 'has-data' : ''}`}>
                     <span className={`ref-level-badge l${level}`}>L{level}</span>
                     <span className="ref-level-count">{count} партн.</span>
-                    <span className="ref-level-earnings">+{earnings} ⭐</span>
+                    <span className="ref-level-earnings">+{earnings}</span>
                   </div>
                 ))}
               </div>

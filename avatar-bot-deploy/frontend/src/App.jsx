@@ -1,7 +1,27 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTelegram } from './hooks/useTelegram';
-import { generateAvatar, getUserStatus, createInvoice, generateMultiPhoto, generateStyleTransfer, generateVideo, generateLipSync, generateRemoveBg, generateEnhance, generateTextToImage, generatePhotosession, validateAdminPassword, getPaymentHistory } from './utils/api';
+import {
+  generateAvatar,
+  getUserStatus,
+  createInvoice,
+  generateMultiPhoto,
+  generateStyleTransfer,
+  generateVideo,
+  generateLipSync,
+  generateRemoveBg,
+  generateEnhance,
+  generateTextToImage,
+  generatePhotosession,
+  validateAdminPassword,
+  getPaymentHistory,
+  generateRealEstateRenovation,
+  generateRealEstateEnhance,
+  generateRealEstateVideo,
+  generateRealEstateListingText,
+  generateRealEstatePackage,
+} from './utils/api';
 import { MODES, DEFAULT_MODE, getStarCost } from './utils/modes';
+import { DEFAULT_RENOVATION_STYLE, DEFAULT_ROOM_TYPE, EMPTY_OBJECT_INFO, REAL_ESTATE_DISCLAIMER } from './utils/realEstate';
 import PhotoUpload from './components/PhotoUpload';
 import StyleSelector from './components/StyleSelector';
 import GenerateButton from './components/GenerateButton';
@@ -19,6 +39,8 @@ import ThemeSelector from './components/ThemeSelector';
 import AdminPanel from './components/AdminPanel';
 import HistoryScreen from './components/HistoryScreen';
 import ReferralScreen from './components/ReferralScreen';
+import RealEstateOptions from './components/RealEstateOptions';
+import ObjectInfoForm from './components/ObjectInfoForm';
 import { saveGeneration } from './utils/generationCache';
 
 const STAR_PACKAGES = [
@@ -26,6 +48,7 @@ const STAR_PACKAGES = [
   { amount: 25, bonus: 5, total: 30, badge: null },
   { amount: 50, bonus: 15, total: 65, badge: 'Популярный' },
   { amount: 100, bonus: 50, total: 150, badge: 'Лучшая цена' },
+  { amount: 155, bonus: 0, total: 155, badge: 'Видео' },
 ];
 
 const SCREENS = {
@@ -38,6 +61,53 @@ const SCREENS = {
   REFERRAL: 'referral',
 };
 
+function pickArray(...values) {
+  return values.find((value) => Array.isArray(value) && value.length > 0) || [];
+}
+
+function normalizeGenerationResult(data, resultType) {
+  const payload = Array.isArray(data) ? data[0] : data;
+  const metadata = payload?.metadata || {};
+  const imageUrls = pickArray(
+    payload?.image_urls,
+    payload?.images?.map((img) => img?.url).filter(Boolean),
+    metadata.image_urls
+  );
+  const videoUrl = payload?.video_url || payload?.video?.url || payload?.media_url || metadata.video_url || '';
+  const listingText = payload?.listing_text || payload?.text || payload?.message || metadata.listing_text || '';
+  const imageUrl = payload?.image_url || imageUrls[0] || payload?.images?.[0]?.url || metadata.image_url || '';
+
+  if (resultType === 'text') {
+    return { imageUrls: [], imageUrl: '', videoUrl: '', listingText, primaryUrl: '', resultType: 'text', metadata };
+  }
+
+  if (resultType === 'mixed') {
+    return {
+      imageUrls,
+      imageUrl: imageUrl || imageUrls[0] || '',
+      videoUrl,
+      listingText,
+      primaryUrl: imageUrls[0] || videoUrl || '',
+      resultType: 'mixed',
+      metadata,
+    };
+  }
+
+  if (resultType === 'video') {
+    return { imageUrls: [], imageUrl: '', videoUrl, listingText, primaryUrl: videoUrl, resultType: 'video', metadata };
+  }
+
+  return {
+    imageUrls: imageUrl ? [imageUrl] : imageUrls,
+    imageUrl,
+    videoUrl: '',
+    listingText,
+    primaryUrl: imageUrl,
+    resultType: 'image',
+    metadata,
+  };
+}
+
 export default function App() {
   const { tg, initTelegram, userId, username, initData, hapticFeedback, openInvoice, startParam } = useTelegram();
 
@@ -46,6 +116,8 @@ export default function App() {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [resultImage, setResultImage] = useState(null);
+  const [resultImages, setResultImages] = useState([]);
+  const [resultText, setResultText] = useState('');
   // Инициализация из кеша для мгновенного отображения
   const [freeGens, setFreeGens] = useState(() => {
     try {
@@ -67,8 +139,11 @@ export default function App() {
 
   // New mode state
   const [mode, setMode] = useState(DEFAULT_MODE);
-  const [photos, setPhotos] = useState([null, null, null, null]);
+  const [photos, setPhotos] = useState(Array(10).fill(null));
   const [promptText, setPromptText] = useState('');
+  const [roomType, setRoomType] = useState(DEFAULT_ROOM_TYPE);
+  const [renovationStyle, setRenovationStyle] = useState(DEFAULT_RENOVATION_STYLE);
+  const [objectInfo, setObjectInfo] = useState(EMPTY_OBJECT_INFO);
   const [videoDuration, setVideoDuration] = useState('5');
   const [videoQuality, setVideoQuality] = useState('std');
   const [videoSound, setVideoSound] = useState(false);
@@ -92,6 +167,7 @@ export default function App() {
   const [styleResolution, setStyleResolution] = useState('2K');
   const [selectedTheme, setSelectedTheme] = useState(null);
   const [insufficientMsg, setInsufficientMsg] = useState(null);
+  const [statusLoadFailed, setStatusLoadFailed] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -143,12 +219,12 @@ export default function App() {
     hapticFeedback('light');
     const botUsername = import.meta.env.VITE_BOT_USERNAME || 'those_are_the_gifts_bot';
     const link = `https://t.me/${botUsername}?start=ref_${userId}`;
-    const text = '\ud83c\udfa8 \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 AI DEVELOPERS \u2014 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f \u0430\u0432\u0430\u0442\u0430\u0440\u043e\u043a, \u0432\u0438\u0434\u0435\u043e \u0438 \u0430\u0440\u0442\u0430 \u043f\u0440\u044f\u043c\u043e \u0432 Telegram! \u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0435 \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043a\u0430\u0436\u0434\u044b\u0439 \u0434\u0435\u043d\u044c.';
+    const text = 'Попробуй AI-визуализацию недвижимости: загрузи фото квартиры и получи продающие изображения, видео и текст объявления.';
     try {
       if (tg) {
         tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
       } else if (navigator.share) {
-        navigator.share({ title: 'AI DEVELOPERS', text, url: link });
+        navigator.share({ title: 'AI-визуализация недвижимости', text, url: link });
       } else {
         navigator.clipboard?.writeText(`${text}\n${link}`);
       }
@@ -198,10 +274,12 @@ export default function App() {
       }
 
       setIsBlocked(false);
+      setStatusLoadFailed(false);
       const newFreeGens = {
         free_stylize: status.free_stylize ?? 0,
         free_remove_bg: status.free_remove_bg ?? 0,
         free_enhance: status.free_enhance ?? 0,
+        free_text_to_image: status.free_text_to_image ?? 0,
       };
       const newBalance = status.star_balance || 0;
       setFreeGens(newFreeGens);
@@ -213,7 +291,9 @@ export default function App() {
       } catch {}
     } catch (e) {
       console.error('Failed to load user status:', e);
-      setFreeGens({ free_stylize: 1, free_remove_bg: 1, free_enhance: 1 });
+      // Не подставляем фейковый баланс — если кеша нет, freeGens останется null
+      // и UI покажет "..." вместо ложных бесплатных генераций
+      setStatusLoadFailed(true);
     }
   };
 
@@ -241,8 +321,11 @@ export default function App() {
     setPhotoFile(null);
     setPhotoPreview(null);
     setSelectedStyle(null);
-    setPhotos([null, null, null, null]);
+    setPhotos(Array(10).fill(null));
     setPromptText('');
+    setRoomType(DEFAULT_ROOM_TYPE);
+    setRenovationStyle(DEFAULT_RENOVATION_STYLE);
+    setObjectInfo(EMPTY_OBJECT_INFO);
     setVideoDuration('5');
     setVideoQuality('std');
     setVideoSound(false);
@@ -285,6 +368,28 @@ export default function App() {
   const freeLeft = (freeGens && currentMode.freeKey) ? (freeGens[currentMode.freeKey] || 0) : 0;
   let canGenerate = false;
   switch (mode) {
+    case 'real_estate_renovation':
+      canGenerate = !!(photoFile && roomType && renovationStyle);
+      break;
+    case 'real_estate_enhance':
+      canGenerate = !!photoFile;
+      break;
+    case 'real_estate_video':
+      canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 3);
+      break;
+    case 'real_estate_listing_text':
+      canGenerate = Boolean(
+        promptText.trim()
+        || objectInfo.city
+        || objectInfo.district
+        || objectInfo.rooms
+        || objectInfo.area
+        || objectInfo.highlights
+      );
+      break;
+    case 'real_estate_full_package':
+      canGenerate = photos.filter(Boolean).length >= (currentMode.minPhotos || 3) && !!renovationStyle;
+      break;
     case 'stylize':
       canGenerate = !!(photoFile && selectedStyle);
       break;
@@ -326,7 +431,7 @@ export default function App() {
     const hasFree = currentMode.hasFree && freeLeft > 0;
     if (!hasFree && starBalance < starCost) {
       console.warn('[handleGenerate] insufficient balance, showing message + top-up');
-      setInsufficientMsg(`Недостаточно звёзд! Нужно ${starCost} ⭐, у вас ${starBalance} ⭐`);
+      setInsufficientMsg(`На балансе недостаточно кредитов. Нужно ${starCost}, у вас ${starBalance}. Пополните баланс через Telegram Stars.`);
       hapticFeedback('medium');
       setTimeout(() => setShowTopUp(true), 1200);
       return;
@@ -336,6 +441,10 @@ export default function App() {
     setIsLoading(true);
     setScreen(SCREENS.LOADING);
     setResultType(currentMode.resultType);
+    setResultImage(null);
+    setResultImages([]);
+    setResultVideo(null);
+    setResultText('');
     setError(null);
     hapticFeedback('medium');
 
@@ -343,6 +452,66 @@ export default function App() {
       let result;
 
       switch (mode) {
+        case 'real_estate_renovation':
+          result = await generateRealEstateRenovation({
+            userId,
+            username,
+            file: photoFile,
+            roomType,
+            renovationStyle,
+            initData,
+            cost: starCost,
+            disclaimer: REAL_ESTATE_DISCLAIMER,
+          });
+          break;
+        case 'real_estate_enhance':
+          result = await generateRealEstateEnhance({
+            userId,
+            username,
+            file: photoFile,
+            roomType,
+            initData,
+            cost: starCost,
+            disclaimer: REAL_ESTATE_DISCLAIMER,
+          });
+          break;
+        case 'real_estate_video':
+          result = await generateRealEstateVideo({
+            userId,
+            username,
+            files: photos.filter(Boolean).map((p) => p.file),
+            roomType,
+            renovationStyle,
+            initData,
+            cost: starCost,
+            disclaimer: REAL_ESTATE_DISCLAIMER,
+          });
+          break;
+        case 'real_estate_listing_text':
+          result = await generateRealEstateListingText({
+            userId,
+            username,
+            objectInfo,
+            prompt: promptText,
+            initData,
+            cost: starCost,
+            disclaimer: REAL_ESTATE_DISCLAIMER,
+          });
+          break;
+        case 'real_estate_full_package':
+          result = await generateRealEstatePackage({
+            userId,
+            username,
+            files: photos.filter(Boolean).map((p) => p.file),
+            roomType,
+            renovationStyle,
+            objectInfo,
+            prompt: promptText,
+            initData,
+            cost: starCost,
+            disclaimer: REAL_ESTATE_DISCLAIMER,
+          });
+          break;
         case 'stylize':
           result = await generateAvatar(userId, photoFile, selectedStyle, initData, creativity);
           break;
@@ -375,7 +544,7 @@ export default function App() {
           result = await generateRemoveBg(userId, photoFile, initData);
           break;
         case 'enhance':
-          result = await generateEnhance(userId, photoFile, initData);
+          result = await generateEnhance(userId, photoFile, promptText, initData);
           break;
         case 'text_to_image':
           result = await generateTextToImage(userId, promptText, initData);
@@ -398,37 +567,55 @@ export default function App() {
       }
 
       // New flow: result sent to Telegram DM
-      if (data?.sent) {
+      if (data?.sent && mode !== 'real_estate_full_package') {
         setScreen(SCREENS.SENT);
         hapticFeedback('heavy');
         await loadUserStatus();
         return;
       }
 
-      // Fallback: old flow with image/video URL in response
-      if (currentMode.resultType === 'video') {
-        const videoUrl = data?.video_url || data?.video?.url;
-        if (videoUrl) {
-          saveGeneration({ mode, result_type: 'video', result_url: videoUrl, prompt: promptText });
-          setResultVideo(videoUrl);
-          setScreen(SCREENS.RESULT);
-          hapticFeedback('heavy');
-          await loadUserStatus();
-        } else {
-          throw new Error(`No video in response. Keys: ${Object.keys(data || {}).join(',')}`);
-        }
-      } else {
-        const imageUrl = data?.image_url || data?.images?.[0]?.url;
-        if (imageUrl) {
-          saveGeneration({ mode, result_type: 'image', result_url: imageUrl, prompt: promptText });
-          setResultImage(imageUrl);
-          setScreen(SCREENS.RESULT);
-          hapticFeedback('heavy');
-          await loadUserStatus();
-        } else {
-          throw new Error(`No image in response. Keys: ${Object.keys(data || {}).join(',')}`);
-        }
+      // Fallback: response contains URLs/text for the result screen
+      const normalized = normalizeGenerationResult(data, currentMode.resultType);
+      const hasResult = Boolean(
+        normalized.primaryUrl
+        || normalized.imageUrls.length
+        || normalized.videoUrl
+        || normalized.listingText
+      );
+
+      if (!hasResult) {
+        throw new Error(`No result in response. Keys: ${Object.keys(data || {}).join(',')}`);
       }
+
+      const metadata = {
+        ...normalized.metadata,
+        room_type: roomType,
+        style: renovationStyle,
+        object_info: objectInfo,
+        image_urls: normalized.imageUrls,
+        video_url: normalized.videoUrl,
+        listing_text: normalized.listingText,
+        disclaimer: REAL_ESTATE_DISCLAIMER,
+      };
+
+      saveGeneration({
+        mode,
+        result_type: normalized.resultType,
+        result_url: normalized.primaryUrl,
+        image_urls: normalized.imageUrls,
+        video_url: normalized.videoUrl,
+        listing_text: normalized.listingText,
+        prompt: promptText,
+        metadata,
+      });
+
+      setResultImages(normalized.imageUrls);
+      setResultImage(normalized.imageUrl || normalized.imageUrls[0] || null);
+      setResultVideo(normalized.videoUrl || null);
+      setResultText(normalized.listingText);
+      setScreen(SCREENS.RESULT);
+      hapticFeedback('heavy');
+      await loadUserStatus();
     } catch (e) {
       console.error('[handleGenerate] FAILED:', e.message, e);
       const msg = e.message || '';
@@ -438,7 +625,7 @@ export default function App() {
       } else if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
         userMsg = 'Нет подключения к серверу. Проверьте интернет и попробуйте снова.';
       } else if (msg.includes('insufficient_balance') || msg.includes('No balance')) {
-        userMsg = 'Недостаточно звёзд. Пополните баланс.';
+        userMsg = 'Недостаточно кредитов. Пополните баланс.';
       } else if (msg.includes('UPLOAD') || msg.includes('upload')) {
         userMsg = 'Не удалось загрузить фото. Попробуйте другое изображение.';
       } else if (msg.includes('No image') || msg.includes('No video')) {
@@ -460,13 +647,18 @@ export default function App() {
   const handleNewGeneration = () => {
     setScreen(SCREENS.MAIN);
     setResultImage(null);
+    setResultImages([]);
     setResultVideo(null);
+    setResultText('');
     setResultType('image');
     setPhotoFile(null);
     setPhotoPreview(null);
     setSelectedStyle(null);
-    setPhotos([null, null, null, null]);
+    setPhotos(Array(10).fill(null));
     setPromptText('');
+    setRoomType(DEFAULT_ROOM_TYPE);
+    setRenovationStyle(DEFAULT_RENOVATION_STYLE);
+    setObjectInfo(EMPTY_OBJECT_INFO);
     setVideoDuration('5');
     setVideoQuality('std');
     setVideoSound(false);
@@ -482,11 +674,16 @@ export default function App() {
     // Keep mode selection
   };
 
-  // URL with prompt examples (replace with actual link)
-  const PROMPT_EXAMPLES_URL = 'https://www.localbanana.io/';
+  // Примеры промптов — пока нет реальной страницы, кнопка скрыта (examplesUrl не передаётся)
+  // const PROMPT_EXAMPLES_URL = null;
 
   // Button label per mode
   const buttonLabels = {
+    real_estate_renovation: 'Создать AI-ремонт',
+    real_estate_enhance: 'Улучшить фото объекта',
+    real_estate_video: 'Создать видео объекта',
+    real_estate_listing_text: 'Сгенерировать текст',
+    real_estate_full_package: 'Создать полный пакет',
     stylize: '\u2728 Создать аватарку',
     multi_photo: '\u2728 Сгенерировать',
     style_transfer: '\u2728 Перенести стиль',
@@ -497,6 +694,21 @@ export default function App() {
     text_to_image: '\ud83d\udcac Создать',
     photosession: '\ud83d\udcf8 Запустить фотосессию',
   };
+
+  // Если нет userId — приложение открыто вне Telegram
+  if (!userId) {
+    return (
+      <div className="app">
+        <div className="bg-gradient"></div>
+        <div className="bg-noise"></div>
+        <div className="error-screen">
+          <div className="error-icon">📱</div>
+          <h2>Откройте через Telegram</h2>
+          <p>Это приложение работает только внутри Telegram. Откройте бота и нажмите кнопку меню.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -509,16 +721,18 @@ export default function App() {
         <SentScreen onBack={handleNewGeneration} />
       )}
 
-      {screen === SCREENS.RESULT && (resultImage || resultVideo) && (
+      {screen === SCREENS.RESULT && (resultImage || resultVideo || resultText || resultImages.length > 0) && (
         <ResultScreen
           imageUrl={resultImage}
+          imageUrls={resultImages}
           videoUrl={resultVideo}
+          listingText={resultText}
           resultType={resultType}
-          style={selectedStyle}
           onNewGeneration={handleNewGeneration}
           userId={userId}
           starBalance={starBalance}
           onTopUp={() => setShowTopUp(true)}
+          disclaimer={REAL_ESTATE_DISCLAIMER}
         />
       )}
 
@@ -527,11 +741,7 @@ export default function App() {
           <div className="error-icon">😔</div>
           <h2>Ошибка</h2>
           <p>{error}</p>
-          {errorDetails && (
-            <div style={{ fontSize: '11px', color: 'var(--text-hint)', marginTop: '10px', padding: '10px', background: 'var(--bg-secondary)', borderRadius: '8px', wordBreak: 'break-word', fontFamily: 'monospace' }}>
-              {errorDetails}
-            </div>
-          )}
+          {/* errorDetails скрыт от пользователя — логируется только в console */}
           <button className="action-btn primary" onClick={() => { setScreen(SCREENS.MAIN); setError(null); setErrorDetails(null); }}>
             Попробовать снова
           </button>
@@ -545,13 +755,13 @@ export default function App() {
         <div className="main-screen">
           <header className="app-header">
             <h1 className="app-title">
-              <span className="title-accent" onClick={handleAiClick}>AI</span> DEVELOPERS
+              <span className="title-accent" onClick={handleAiClick}>AI</span> визуализация недвижимости
             </h1>
-            <p className="app-subtitle">{currentMode.description}</p>
+            <p className="app-subtitle">Загрузите фото квартиры и получите продающие изображения, видео и текст объявления.</p>
             <div className="header-actions">
               <button className="header-action-btn stars" onClick={() => setShowTopUp(true)}>
-                <span className="header-action-icon">⭐</span>
-                <span className="header-action-label">{freeGens !== null ? (starBalance || 0) : '...'}</span>
+                <span className="header-action-icon">₽</span>
+                <span className="header-action-label">{freeGens !== null ? `${starBalance || 0} кредитов` : '...'}</span>
               </button>
 <button className="header-action-btn referral" onClick={() => { hapticFeedback('light'); setScreen(SCREENS.REFERRAL); }}>
                 <span className="header-action-icon">🎁</span>
@@ -570,11 +780,117 @@ export default function App() {
             modeId={mode}
           />
 
+          {statusLoadFailed && !freeGens && (
+            <div className="insufficient-balance-msg" onClick={() => { setStatusLoadFailed(false); loadUserStatus(); }} style={{ cursor: 'pointer' }}>
+              <span className="insufficient-icon">⚠️</span>
+              <span>Не удалось загрузить данные. Нажмите, чтобы повторить.</span>
+            </div>
+          )}
+
           {insufficientMsg && (
             <div className="insufficient-balance-msg">
               <span className="insufficient-icon">⚠️</span>
               <span>{insufficientMsg}</span>
             </div>
+          )}
+
+          {mode === 'real_estate_renovation' && (
+            <>
+              <PhotoUpload
+                onPhotoSelected={handlePhotoSelected}
+                uploadTitle="Загрузите фото комнаты"
+                uploadHint="AI сохранит планировку и создаст визуализацию возможного ремонта"
+              />
+              {photoFile && (
+                <RealEstateOptions
+                  roomType={roomType}
+                  onRoomTypeChange={(value) => { setRoomType(value); hapticFeedback('light'); }}
+                  renovationStyle={renovationStyle}
+                  onRenovationStyleChange={(value) => { setRenovationStyle(value); hapticFeedback('light'); }}
+                />
+              )}
+              <div className="real-estate-disclaimer">{REAL_ESTATE_DISCLAIMER}</div>
+            </>
+          )}
+
+          {mode === 'real_estate_enhance' && (
+            <>
+              <PhotoUpload
+                onPhotoSelected={handlePhotoSelected}
+                uploadTitle="Загрузите фото объекта"
+                uploadHint="AI улучшит свет, резкость и цвет, не меняя ремонт и мебель"
+              />
+              {photoFile && (
+                <RealEstateOptions
+                  roomType={roomType}
+                  onRoomTypeChange={(value) => { setRoomType(value); hapticFeedback('light'); }}
+                  renovationStyle={renovationStyle}
+                  onRenovationStyleChange={setRenovationStyle}
+                  showStyle={false}
+                />
+              )}
+              <div className="real-estate-disclaimer">{REAL_ESTATE_DISCLAIMER}</div>
+            </>
+          )}
+
+          {mode === 'real_estate_video' && (
+            <>
+              <MultiPhotoUpload
+                photos={photos}
+                onPhotosChanged={setPhotos}
+                minPhotos={currentMode.minPhotos || 3}
+                maxPhotos={currentMode.maxPhotos || 10}
+                label={`Загружено ${photos.filter(Boolean).length} из ${currentMode.maxPhotos || 10}`}
+                hint="Загрузите 3-10 фотографий квартиры: кухня, гостиная, спальня, санузел, фасад или подъезд."
+              />
+              <RealEstateOptions
+                roomType={roomType}
+                onRoomTypeChange={(value) => { setRoomType(value); hapticFeedback('light'); }}
+                renovationStyle={renovationStyle}
+                onRenovationStyleChange={(value) => { setRenovationStyle(value); hapticFeedback('light'); }}
+              />
+              <div className="real-estate-disclaimer">{REAL_ESTATE_DISCLAIMER}</div>
+            </>
+          )}
+
+          {mode === 'real_estate_listing_text' && (
+            <>
+              <ObjectInfoForm value={objectInfo} onChange={setObjectInfo} />
+              <PromptInput
+                value={promptText}
+                onChange={setPromptText}
+                placeholder="Дополните важные детали: ремонт, окна, инфраструктура, кому подойдёт квартира..."
+                maxLength={1000}
+              />
+              <div className="real-estate-disclaimer">{REAL_ESTATE_DISCLAIMER}</div>
+            </>
+          )}
+
+          {mode === 'real_estate_full_package' && (
+            <>
+              <MultiPhotoUpload
+                photos={photos}
+                onPhotosChanged={setPhotos}
+                minPhotos={currentMode.minPhotos || 3}
+                maxPhotos={currentMode.maxPhotos || 10}
+                label={`Загружено ${photos.filter(Boolean).length} из ${currentMode.maxPhotos || 10}`}
+                hint="Для полного пакета загрузите 3-10 фото объекта. Лучше: кухня, гостиная, спальня, санузел, вид из окна или входная группа."
+              />
+              <RealEstateOptions
+                roomType={roomType}
+                onRoomTypeChange={(value) => { setRoomType(value); hapticFeedback('light'); }}
+                renovationStyle={renovationStyle}
+                onRenovationStyleChange={(value) => { setRenovationStyle(value); hapticFeedback('light'); }}
+              />
+              <ObjectInfoForm value={objectInfo} onChange={setObjectInfo} />
+              <PromptInput
+                value={promptText}
+                onChange={setPromptText}
+                placeholder="Особые пожелания к ролику или тексту объявления..."
+                maxLength={700}
+              />
+              <div className="real-estate-disclaimer">{REAL_ESTATE_DISCLAIMER}</div>
+            </>
           )}
 
           {/* Stylize mode */}
@@ -618,7 +934,6 @@ export default function App() {
                 value={promptText}
                 onChange={setPromptText}
                 placeholder="Опишите, как объединить фото... Например: объедини лица с фото 1 и 2 в стиле киберпанк"
-                examplesUrl={PROMPT_EXAMPLES_URL}
               />
             </>
           )}
@@ -632,7 +947,6 @@ export default function App() {
                 promptText={promptText}
                 onPromptChange={setPromptText}
                 promptPlaceholder="Опишите желаемый стиль или результат..."
-                examplesUrl={PROMPT_EXAMPLES_URL}
               />
               {photos.filter(Boolean).length >= 2 && (
                 <ResolutionSelector
@@ -657,8 +971,7 @@ export default function App() {
                     value={promptText}
                     onChange={setPromptText}
                     placeholder="Опишите желаемое движение... Например: человек поворачивает голову и улыбается"
-                    examplesUrl={PROMPT_EXAMPLES_URL}
-                  />
+                      />
                   <DurationSelector
                     selectedDuration={videoDuration}
                     onDurationSelect={setVideoDuration}
@@ -754,8 +1067,7 @@ export default function App() {
                     value={promptText}
                     onChange={setPromptText}
                     placeholder="Опишите выражение лица (необязательно)... Например: улыбается, смотрит в камеру"
-                    examplesUrl={PROMPT_EXAMPLES_URL}
-                  />
+                      />
                 </>
               )}
             </>
@@ -772,11 +1084,21 @@ export default function App() {
 
           {/* Enhance mode */}
           {mode === 'enhance' && (
-            <PhotoUpload
-              onPhotoSelected={handlePhotoSelected}
-              uploadTitle="Загрузи фото для улучшения"
-              uploadHint="AI увеличит разрешение и улучшит качество любого фото"
-            />
+            <>
+              <PhotoUpload
+                onPhotoSelected={handlePhotoSelected}
+                uploadTitle="Загрузи фото для улучшения"
+                uploadHint="AI увеличит разрешение и улучшит качество любого фото"
+              />
+              {photoFile && (
+                <PromptInput
+                  value={promptText}
+                  onChange={setPromptText}
+                  placeholder="Что улучшить? Например: убери шум, повысь резкость, сделай ярче..."
+                  maxLength={500}
+                />
+              )}
+            </>
           )}
 
           {/* Text to image mode */}
@@ -786,7 +1108,6 @@ export default function App() {
               onChange={setPromptText}
               placeholder="Опишите изображение... Например: космонавт верхом на лошади в стиле ренессанс"
               maxLength={1000}
-              examplesUrl={PROMPT_EXAMPLES_URL}
             />
           )}
 
@@ -846,8 +1167,9 @@ export default function App() {
       {showTopUp && (
         <div className="modal-overlay" onClick={() => setShowTopUp(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Пополнить баланс</h3>
-            <p className="modal-balance">Текущий баланс: <strong>{starBalance} ⭐</strong></p>
+            <h3>Пополнить кредиты</h3>
+            <p className="modal-balance">Текущий баланс: <strong>{starBalance} кредитов</strong></p>
+            <p className="topup-note">Сейчас рабочий способ пополнения — Telegram Stars. Баланс внутри приложения отображается как кредиты.</p>
             <div className="topup-packages">
               {STAR_PACKAGES.map((pkg) => (
                 <button
@@ -856,14 +1178,17 @@ export default function App() {
                   onClick={() => setTopUpAmount(pkg.amount)}
                 >
                   {pkg.badge && <span className="package-badge">{pkg.badge}</span>}
-                  <span className="package-amount">{pkg.amount} ⭐</span>
-                  <span className="package-total">= {pkg.total} на баланс</span>
-                  {pkg.bonus > 0 && <span className="package-bonus">+{pkg.bonus} бонус</span>}
+                  <span className="package-amount">{pkg.amount} Stars</span>
+                  <span className="package-total">= {pkg.total} кредитов</span>
+                  {pkg.bonus > 0 && <span className="package-bonus">+{pkg.bonus} кредитов бонусом</span>}
                 </button>
               ))}
             </div>
-            <button className="topup-confirm-btn" onClick={() => handleTopUp()}>
-              Оплатить {topUpAmount} ⭐
+            <button
+              className="topup-confirm-btn"
+              onClick={() => handleTopUp()}
+            >
+              Оплатить {topUpAmount} Stars
             </button>
             <button className="modal-close-btn" onClick={() => setShowTopUp(false)}>
               Отмена
@@ -881,9 +1206,9 @@ export default function App() {
                       <span className="payment-history-date">
                         {new Date(p.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                       </span>
-                      <span className="payment-history-amount">{p.stars} ⭐</span>
+                      <span className="payment-history-amount">{p.stars} Stars</span>
                       {p.bonus > 0 && <span className="payment-history-bonus">+{p.bonus}</span>}
-                      <span className="payment-history-total">= {p.total_credited}</span>
+                      <span className="payment-history-total">= {p.total_credited || p.credits}</span>
                     </div>
                   ))}
                 </div>

@@ -1,6 +1,39 @@
 import { useState, useEffect } from 'react';
 
 const MESSAGES_BY_MODE = {
+  real_estate_renovation: [
+    'Анализирую планировку...',
+    'Сохраняю геометрию комнаты...',
+    'Подбираю ремонт и мебель...',
+    'Выставляю свет...',
+    'Готовлю визуализацию...',
+  ],
+  real_estate_enhance: [
+    'Анализирую качество фото...',
+    'Выравниваю свет и цвет...',
+    'Повышаю резкость...',
+    'Сохраняю реальное состояние объекта...',
+  ],
+  real_estate_video: [
+    'Проверяю фотографии объекта...',
+    'Собираю маршрут показа...',
+    'Готовлю вертикальный ролик...',
+    'Добавляю плавные переходы...',
+    'Рендерю видео...',
+  ],
+  real_estate_listing_text: [
+    'Собираю данные объекта...',
+    'Выделяю преимущества...',
+    'Пишу текст объявления...',
+    'Добавляю пометку о визуализации...',
+  ],
+  real_estate_full_package: [
+    'Анализирую объект...',
+    'Готовлю AI-визуализации...',
+    'Собираю видео...',
+    'Пишу текст объявления...',
+    'Формирую полный пакет...',
+  ],
   stylize: [
     'Анализирую лицо... 🔍',
     'Применяю магию стиля... 🎨',
@@ -71,6 +104,11 @@ const MESSAGES_BY_MODE = {
 };
 
 const HINTS = {
+  real_estate_renovation: 'Визуализация может занять 1–3 минуты',
+  real_estate_enhance: 'Обычно занимает 20–60 секунд',
+  real_estate_video: 'Видео из фото может занять несколько минут',
+  real_estate_listing_text: 'Обычно занимает до минуты',
+  real_estate_full_package: 'Полный пакет может занять несколько минут',
   stylize: 'Обычно занимает 20–40 секунд',
   multi_photo: 'Обычно занимает 30–60 секунд',
   style_transfer: 'Генерация может занять несколько минут',
@@ -88,7 +126,16 @@ export default function LoadingScreen({ mode = 'stylize' }) {
 
   const messages = MESSAGES_BY_MODE[mode] || MESSAGES_BY_MODE.stylize;
   const hint = HINTS[mode] || HINTS.stylize;
-  const isSlowMode = mode === 'photo_to_video' || mode === 'style_transfer' || mode === 'multi_photo' || mode === 'text_to_image' || mode === 'stylize' || mode === 'lip_sync' || mode === 'photosession';
+  const isSlowMode = mode === 'photo_to_video'
+    || mode === 'style_transfer'
+    || mode === 'multi_photo'
+    || mode === 'text_to_image'
+    || mode === 'stylize'
+    || mode === 'lip_sync'
+    || mode === 'photosession'
+    || mode === 'real_estate_renovation'
+    || mode === 'real_estate_video'
+    || mode === 'real_estate_full_package';
 
   useEffect(() => {
     setMessageIndex(0);

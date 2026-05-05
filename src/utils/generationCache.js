@@ -13,14 +13,35 @@ function filterExpired(items) {
   });
 }
 
-export function saveGeneration({ mode, result_type, result_url, prompt }) {
+export function getPrimaryResultUrl(item) {
+  const metadata = item?.metadata || {};
+  const imageUrls = item?.image_urls || metadata.image_urls || [];
+  return item?.result_url || item?.video_url || metadata.video_url || imageUrls[0] || '';
+}
+
+export function saveGeneration({
+  mode,
+  result_type,
+  result_url,
+  image_urls,
+  video_url,
+  listing_text,
+  prompt,
+  metadata,
+}) {
   try {
     const items = filterExpired(getGenerationsRaw());
+    const normalizedMetadata = metadata || {};
+    const normalizedImageUrls = image_urls || normalizedMetadata.image_urls || [];
     items.unshift({
       mode,
       result_type,
-      result_url,
+      result_url: result_url || video_url || normalizedImageUrls[0] || '',
+      image_urls: normalizedImageUrls,
+      video_url: video_url || normalizedMetadata.video_url || '',
+      listing_text: listing_text || normalizedMetadata.listing_text || '',
       prompt: prompt || '',
+      metadata: normalizedMetadata,
       created_at: new Date().toISOString(),
     });
     if (items.length > MAX_ITEMS) items.length = MAX_ITEMS;
@@ -50,7 +71,18 @@ export function getLastGeneration() {
 
 export function deleteGenerationByUrl(result_url) {
   try {
-    const items = getGenerationsRaw().filter(item => item.result_url !== result_url);
+    const items = getGenerationsRaw().filter(item => {
+      if (!result_url) return true;
+      const metadata = item?.metadata || {};
+      const urls = [
+        item.result_url,
+        item.video_url,
+        metadata.video_url,
+        ...(item.image_urls || []),
+        ...(metadata.image_urls || []),
+      ].filter(Boolean);
+      return !urls.includes(result_url);
+    });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   } catch (e) {
     // ignore

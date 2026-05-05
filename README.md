@@ -1,137 +1,73 @@
-# AI Avatar Bot — Telegram Mini App
+# AI-визуализация недвижимости — Telegram Mini App
 
-Telegram Mini App для генерации AI-аватарок из фото пользователя.
+Telegram Mini App для риэлторов: пользователь загружает фотографии квартиры, выбирает тип помещения и стиль ремонта, пополняет единый баланс кредитов через Telegram Stars, получает AI-фото, видео объекта и текст объявления.
+
+Рабочее имя репозитория оставлено `avatar-bot-miniapp`, чтобы не ломать deploy-пути и существующие workflow.
 
 ## Стек
 
-- **Frontend:** React + Vite
-- **Backend:** n8n (webhooks)
-- **AI:** fal.ai (face-to-sticker + FLUX)
-- **БД:** PostgreSQL 16 (Docker)
-- **Деплой:** Vercel (фронт), Timeweb VPS (бэкенд)
+- React 18 + Vite frontend
+- Telegram Web App SDK
+- n8n webhooks как backend/orchestration слой
+- PostgreSQL 16
+- S3-compatible storage
+- Telegram Stars
+- Т-Банк пока отключен из рабочего процесса; подготовленные specs можно вернуть позже
+
+## Основные режимы
+
+| Режим | Результат | Стоимость |
+|---|---|---:|
+| AI-ремонт | 1 фото с визуализацией ремонта и мебели | 20 кредитов |
+| Улучшить фото | свет, резкость, цвет без изменения объекта | 8 кредитов |
+| Видео объекта | вертикальный ролик из 3-10 фото | 150 кредитов |
+| Текст объявления | локальный черновик для Авито/Циан/Домклик/Telegram | 0 кредитов |
+| Полный пакет | видео + текст объявления через рабочий video workflow | 155 кредитов |
+
+Старые avatar/art/video режимы не удалены из кода, но скрыты из пользовательского UI.
 
 ## Быстрый старт
 
-### 1. Клонирование и установка!
-
 ```bash
-git clone https://github.com/YOUR_USERNAME/avatar-bot-miniapp.git
-cd avatar-bot-miniapp
 npm install
-```
-
-### 2. Настройка переменных окружения.  прнр
-
-```bash
-cp .env.example .env
-```
-
-Отредактируй `.env`:
-```
-VITE_API_BASE=https://YOUR_N8N_DOMAIN/webhook
-```
-
-### 3. Локальная разработка
-
-```bash
 npm run dev
 ```
 
-### 4. Деплой на Vercel
+`.env`:
+
+```env
+VITE_API_BASE=https://YOUR_N8N_DOMAIN/webhook
+VITE_BOT_USERNAME=your_bot_name_bot
+```
+
+## Deploy
+
+Deploy-пакет находится в `avatar-bot-deploy/`.
+
+Для VPS:
 
 ```bash
-# Через CLI
-npx vercel
-
-# Или через GitHub — подключи репо в дашборде Vercel
+cd avatar-bot-deploy
+cp config.env.example config.env
+# заполнить DOMAIN, BOT_TOKEN, S3
+sudo ./install.sh
 ```
 
-Не забудь добавить `VITE_API_BASE` в Environment Variables на Vercel.
+Новые SQL-миграции:
 
-### 5. Настройка бота
+- `avatar-bot-deploy/db/04_real_estate_payments.sql`
 
-В BotFather:
-```
-/mybots → @those_are_the_gifts_bot → Bot Settings → Menu Button
-→ URL: https://YOUR_VERCEL_DOMAIN.vercel.app
-```
+Новые n8n specs/templates:
 
-## Настройка n8n
+- `docs/N8N_REAL_ESTATE_WORKFLOWS.md`
+- `docs/WORKING_MVP_PROCESS.md` — текущий рабочий процесс: frontend ходит в существующие endpoints `generate`, `generate-enhance`, `generate-video`, `create-invoice`.
 
-Импортируй `n8n-workflow-skeleton.json` в n8n и настрой 3 webhook-эндпоинта:
-
-### Webhook: user-status (POST)
-Принимает: `{ user_id, init_data }`
-Возвращает: `{ free_generations, total_paid }`
-
-### Webhook: upload-photo (POST, multipart)
-Принимает: FormData с `photo` и `user_id`
-Сохраняет файл на VPS в `/opt/avatar-bot/images/`
-Возвращает: `{ photo_url }`
-
-### Webhook: generate (POST)
-Принимает: `{ user_id, photo_url, style, init_data }`
-1. Проверяет лимиты в PostgreSQL
-2. Вызывает fal.ai API
-3. Сохраняет результат
-4. Возвращает: `{ image_url, free_left }`
-
-## fal.ai API
-
-Модель: `fal-ai/face-to-sticker`
+## Проверка
 
 ```bash
-curl -X POST "https://queue.fal.run/fal-ai/face-to-sticker" \
-  -H "Authorization: Key YOUR_FAL_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image_url": "PHOTO_URL",
-    "prompt": "anime style portrait...",
-    "num_inference_steps": 20,
-    "guidance_scale": 4.5,
-    "instant_id_strength": 0.7,
-    "image_size": "square_hd"
-  }'
+npm run build
+cd avatar-bot-deploy/frontend
+npm run build
 ```
 
-## Структура проекта
-
-```
-avatar-bot-miniapp/
-├── index.html
-├── package.json
-├── vite.config.js
-├── vercel.json
-├── .env.example
-├── src/
-│   ├── main.jsx
-│   ├── App.jsx
-│   ├── styles.css
-│   ├── components/
-│   │   ├── PhotoUpload.jsx
-│   │   ├── StyleSelector.jsx
-│   │   ├── GenerateButton.jsx
-│   │   ├── LoadingScreen.jsx
-│   │   └── ResultScreen.jsx
-│   ├── hooks/
-│   │   └── useTelegram.js
-│   └── utils/
-│       ├── api.js
-│       └── styles.js
-└── n8n-workflow-skeleton.json
-```
-
-## Модели стилей
-
-| Стиль | Промпт (ключевые слова) |
-|-------|------------------------|
-| Аниме | anime style, studio ghibli |
-| Пиксель-арт | pixel art, retro 8-bit |
-| GTA | GTA V loading screen, comic book |
-| 3D Мультяшный | pixar style, 3D cartoon |
-
-## Лимиты
-
-- 3 бесплатных генерации в день
-- 1 Telegram Star за генерацию без водяного знака
-- 15 Stars за пак из 10 генераций
+В Mini App проверить выбор режима, загрузку 1/3-10 фото, историю, текст объявления, Telegram Stars и запуск генераций через существующие n8n endpoints.

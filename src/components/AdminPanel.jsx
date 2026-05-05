@@ -448,7 +448,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
             </div>
             <div className="admin-detail-row">
               <span style={{ color: 'var(--text-hint)' }}>Баланс</span>
-              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{selectedUser.star_balance} ⭐</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{selectedUser.star_balance} кредитов</span>
             </div>
           </div>
 
@@ -471,7 +471,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
             <div style={{ marginBottom: '16px' }}>
               <input
                 type="number"
-                placeholder="Количество звёзд"
+                placeholder="Количество кредитов"
                 value={actionAmount}
                 onChange={(e) => setActionAmount(e.target.value)}
                 className="admin-input"
@@ -483,8 +483,8 @@ export default function AdminPanel({ adminPassword, onClose }) {
                 style={{ width: '100%', padding: '12px', fontSize: '14px' }}
               >
                 {actionLoading ? 'Обработка...'
-                  : actionType === 'credit' ? `Начислить ${actionAmount || '...'} ⭐`
-                  : `Снять ${actionAmount || '...'} ⭐`}
+                  : actionType === 'credit' ? `Начислить ${actionAmount || '...'} кредитов`
+                  : `Снять ${actionAmount || '...'} кредитов`}
               </button>
             </div>
           )}
@@ -559,8 +559,8 @@ export default function AdminPanel({ adminPassword, onClose }) {
                 <div className="admin-stat-label">Новых за 7д</div>
               </div>
               <div className="admin-stat-card wide">
-                <div className="admin-stat-value">{stats.total_star_balance} ⭐</div>
-                <div className="admin-stat-label">Общий баланс звёзд</div>
+                <div className="admin-stat-value">{stats.total_star_balance} кредитов</div>
+                <div className="admin-stat-label">Общий баланс кредитов</div>
               </div>
             </div>
 
@@ -592,7 +592,7 @@ export default function AdminPanel({ adminPassword, onClose }) {
                     >
                       <span className="admin-user-status">{user.blocked ? '🔴' : '🟢'}</span>
                       <span className="admin-user-name">{user.username || user.user_id}</span>
-                      <span className="admin-user-balance">{user.star_balance} ⭐</span>
+                      <span className="admin-user-balance">{user.star_balance} кредитов</span>
                       <span style={{ color: 'var(--text-hint)', fontSize: '14px' }}>›</span>
                     </div>
                   ))}

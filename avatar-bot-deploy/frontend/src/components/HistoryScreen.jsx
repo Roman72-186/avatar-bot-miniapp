@@ -1,8 +1,28 @@
 import { useState, useEffect } from 'react';
 import { getUserGenerations, deleteUserGeneration } from '../utils/api';
-import { getGenerations as getCachedGenerations, deleteGenerationByUrl } from '../utils/generationCache';
+import { getGenerations as getCachedGenerations, deleteGenerationByUrl, getPrimaryResultUrl } from '../utils/generationCache';
 import { MODES } from '../utils/modes';
 import { useTelegram } from '../hooks/useTelegram';
+
+function getMetadata(item) {
+  if (!item?.metadata) return {};
+  if (typeof item.metadata === 'string') {
+    try { return JSON.parse(item.metadata); } catch { return {}; }
+  }
+  return item.metadata;
+}
+
+function getItemDetails(item) {
+  const metadata = getMetadata(item);
+  const imageUrls = item.image_urls || metadata.image_urls || [];
+  const videoUrl = item.video_url || metadata.video_url || (item.result_type === 'video' ? item.result_url : '');
+  const listingText = item.listing_text || metadata.listing_text || '';
+  const primaryUrl = getPrimaryResultUrl({ ...item, metadata, image_urls: imageUrls, video_url: videoUrl });
+  const isVideo = item.result_type === 'video' || (!imageUrls.length && Boolean(videoUrl));
+  const isText = item.result_type === 'text' || (!primaryUrl && Boolean(listingText));
+  const isMixed = item.result_type === 'mixed' || imageUrls.length > 1 || (Boolean(videoUrl) && Boolean(listingText));
+  return { metadata, imageUrls, videoUrl, listingText, primaryUrl, isVideo, isText, isMixed };
+}
 
 export default function HistoryScreen({ userId, initData, onBack }) {
   const { hapticFeedback, tg } = useTelegram();
@@ -61,25 +81,34 @@ export default function HistoryScreen({ userId, initData, onBack }) {
   const handleDownload = (url) => {
     hapticFeedback('light');
     try {
-      if (tg) tg.openLink(url);
-      else window.open(url, '_blank');
+      if (url) {
+        if (tg) tg.openLink(url);
+        else window.open(url, '_blank');
+      } else if (preview) {
+        const { listingText } = getItemDetails(preview);
+        navigator.clipboard?.writeText(listingText);
+      }
     } catch {
-      window.open(url, '_blank');
+      if (url) window.open(url, '_blank');
     }
   };
 
   const handleDelete = async (item) => {
     hapticFeedback('medium');
-    setDeleting(item.id || item.result_url);
+    const { primaryUrl } = getItemDetails(item);
+    setDeleting(item.id || primaryUrl);
     try {
       // Удаляем из БД (если есть id)
       if (item.id && userId) {
         await deleteUserGeneration(userId, item.id, initData).catch(() => {});
       }
       // Удаляем из localStorage
-      deleteGenerationByUrl(item.result_url);
+      deleteGenerationByUrl(primaryUrl);
       // Удаляем из текущего списка
-      setItems(prev => prev.filter(i => (i.id || i.result_url) !== (item.id || item.result_url)));
+      setItems(prev => prev.filter(i => {
+        const currentPrimary = getItemDetails(i).primaryUrl;
+        return (i.id || currentPrimary) !== (item.id || primaryUrl);
+      }));
       setPreview(null);
     } finally {
       setDeleting(null);
@@ -111,17 +140,22 @@ export default function HistoryScreen({ userId, initData, onBack }) {
         <div className="history-grid">
           {items.map((item, idx) => {
             const mode = getModeInfo(item.mode);
-            const isVideo = item.result_type === 'video';
+            const details = getItemDetails(item);
             return (
               <div key={item.id || idx} className="history-item" onClick={() => handleItemClick(item)}>
-                {isVideo ? (
+                {details.isText ? (
+                  <div className="history-text-tile">
+                    <span>📝</span>
+                    <small>Текст</small>
+                  </div>
+                ) : details.isVideo ? (
                   <>
-                    <video src={item.result_url} preload="metadata" muted />
+                    <video src={details.videoUrl || details.primaryUrl} preload="metadata" muted />
                     <div className="history-item-play">▶</div>
                   </>
                 ) : (
                   <img
-                    src={item.result_url}
+                    src={details.primaryUrl}
                     alt=""
                     loading="lazy"
                     onError={(e) => {
@@ -132,6 +166,7 @@ export default function HistoryScreen({ userId, initData, onBack }) {
                 )}
                 <div className="history-item-overlay">
                   <span className="history-item-mode">{mode.emoji}</span>
+                  {details.isMixed && <span className="history-item-mode">пакет</span>}
                 </div>
               </div>
             );
@@ -143,9 +178,21 @@ export default function HistoryScreen({ userId, initData, onBack }) {
         <div className="history-preview-overlay" onClick={handleClosePreview}>
           <button className="history-preview-close" onClick={handleClosePreview}>✕</button>
           <div className="history-preview-content" onClick={e => e.stopPropagation()}>
-            {preview.result_type === 'video' ? (
+            {(() => {
+              const details = getItemDetails(preview);
+              const previewUrl = details.isVideo ? details.videoUrl || details.primaryUrl : details.primaryUrl;
+              if (details.isText) {
+                return (
+                  <div className="history-preview-text">
+                    <div className="listing-result-title">Текст объявления</div>
+                    <p>{details.listingText}</p>
+                  </div>
+                );
+              }
+              if (details.isVideo) {
+                return (
               <video
-                src={preview.result_url}
+                src={previewUrl}
                 className="history-preview-media"
                 controls
                 autoPlay
@@ -153,8 +200,22 @@ export default function HistoryScreen({ userId, initData, onBack }) {
                 playsInline
                 muted
               />
-            ) : (
-              <img src={preview.result_url} alt="" className="history-preview-media" />
+                );
+              }
+              return <img src={previewUrl} alt="" className="history-preview-media" />;
+            })()}
+            {getItemDetails(preview).imageUrls.length > 1 && (
+              <div className="history-preview-gallery">
+                {getItemDetails(preview).imageUrls.slice(0, 6).map((url) => (
+                  <img key={url} src={url} alt="" />
+                ))}
+              </div>
+            )}
+            {getItemDetails(preview).listingText && !getItemDetails(preview).isText && (
+              <div className="history-preview-text compact">
+                <div className="listing-result-title">Текст объявления</div>
+                <p>{getItemDetails(preview).listingText}</p>
+              </div>
             )}
             <div className="history-preview-info">
               {getModeInfo(preview.mode).name}
@@ -162,8 +223,8 @@ export default function HistoryScreen({ userId, initData, onBack }) {
               {preview.created_at ? ` · ${formatDate(preview.created_at)}` : ''}
             </div>
             <div className="history-preview-actions">
-              <button className="action-btn primary" onClick={() => handleDownload(preview.result_url)}>
-                💾 Скачать
+              <button className="action-btn primary" onClick={() => handleDownload(getItemDetails(preview).primaryUrl)}>
+                {getItemDetails(preview).primaryUrl ? '💾 Скачать' : 'Скопировать'}
               </button>
               <button
                 className="action-btn delete"

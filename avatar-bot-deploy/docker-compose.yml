@@ -14,6 +14,7 @@ services:
       - ./db/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./db/02_referral.sql:/docker-entrypoint-initdb.d/02_referral.sql:ro
       - ./db/03_monitoring.sql:/docker-entrypoint-initdb.d/03_monitoring.sql:ro
+      - ./db/04_real_estate_payments.sql:/docker-entrypoint-initdb.d/04_real_estate_payments.sql:ro
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:

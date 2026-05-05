@@ -40,7 +40,7 @@ export function useTelegram() {
         // Fallback для веб-браузера - используем Web Share API если доступна
         if (navigator.share) {
           navigator.share({
-            title: 'Моя аватарка',
+            title: 'AI-визуализация недвижимости',
             text: text,
             url: url
           });

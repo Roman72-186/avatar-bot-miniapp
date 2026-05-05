@@ -1,11 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from '../hooks/useTelegram';
+import { REAL_ESTATE_DISCLAIMER } from '../utils/realEstate';
 
-export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image', style, onNewGeneration, userId, starBalance = 0, onTopUp }) {
+export default function ResultScreen({
+  imageUrl,
+  imageUrls = [],
+  videoUrl,
+  listingText = '',
+  resultType = 'image',
+  onNewGeneration,
+  userId,
+  starBalance = 0,
+  onTopUp,
+  disclaimer = REAL_ESTATE_DISCLAIMER,
+}) {
   const { hapticFeedback, tg, shareResult } = useTelegram();
   const [displayUrl, setDisplayUrl] = useState(null);
 
-  const mediaUrl = resultType === 'video' ? videoUrl : imageUrl;
+  const primaryImage = imageUrl || imageUrls[0];
+  const mediaUrl = resultType === 'video' ? videoUrl : (primaryImage || videoUrl);
+  const displayAsVideo = resultType === 'video' || (!primaryImage && Boolean(videoUrl));
 
   useEffect(() => {
     if (!mediaUrl) return;
@@ -16,14 +30,17 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
 
   const handleDownload = async () => {
     hapticFeedback('light');
+    if (!mediaUrl && !listingText) return;
     try {
       if (tg) {
-        tg.openLink(mediaUrl);
+        if (mediaUrl) tg.openLink(mediaUrl);
+        else navigator.clipboard?.writeText(listingText);
       } else {
-        window.open(mediaUrl, '_blank');
+        if (mediaUrl) window.open(mediaUrl, '_blank');
+        else navigator.clipboard?.writeText(listingText);
       }
     } catch (e) {
-      window.open(mediaUrl, '_blank');
+      if (mediaUrl) window.open(mediaUrl, '_blank');
     }
   };
 
@@ -33,9 +50,7 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
     const refLink = userId
       ? `https://t.me/${botUsername}?start=ref_${userId}`
       : `https://t.me/${botUsername}`;
-    const shareText = resultType === 'video'
-      ? `\u0421\u043c\u043e\u0442\u0440\u0438 \u043a\u0430\u043a\u043e\u0435 \u0432\u0438\u0434\u0435\u043e \u044f \u0441\u0434\u0435\u043b\u0430\u043b \u0441 \u043f\u043e\u043c\u043e\u0449\u044c\u044e AI! \ud83c\udfac\n${mediaUrl}\n\n\u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u0442\u043e\u0436\u0435:`
-      : `\u0421\u043c\u043e\u0442\u0440\u0438 \u043a\u0430\u043a\u0443\u044e \u0430\u0432\u0430\u0442\u0430\u0440\u043a\u0443 \u044f \u0441\u0434\u0435\u043b\u0430\u043b! \ud83c\udfa8\n${mediaUrl}\n\n\u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u0442\u043e\u0436\u0435:`;
+    const shareText = `AI-визуализация недвижимости готова.\n${mediaUrl || listingText || ''}\n\n${disclaimer}\n\nПопробуй тоже:`;
     shareResult(refLink, shareText);
   };
 
@@ -46,43 +61,59 @@ export default function ResultScreen({ imageUrl, videoUrl, resultType = 'image',
 
   return (
     <div className="result-screen">
-      <h2 className="result-title">Готово! 🎉</h2>
-      <div className="result-image-container">
-        {displayUrl ? (
-          resultType === 'video' ? (
-            <video
-              src={displayUrl}
-              className="result-video"
-              controls
-              autoPlay
-              loop
-              playsInline
-              muted
-            />
+      <h2 className="result-title">Готово</h2>
+      {(displayUrl || resultType !== 'text') && (
+        <div className="result-image-container">
+          {displayUrl ? (
+            displayAsVideo ? (
+              <video
+                src={displayUrl}
+                className="result-video"
+                controls
+                autoPlay
+                loop
+                playsInline
+                muted
+              />
+            ) : (
+              <img src={displayUrl} alt="AI-визуализация недвижимости" className="result-image" />
+            )
           ) : (
-            <img src={displayUrl} alt="Generated avatar" className="result-image" />
-          )
-        ) : (
-          <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
-            {resultType === 'video' ? 'Загрузка видео...' : 'Загрузка изображения...'}
-          </div>
-        )}
-      </div>
+            <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
+              Загрузка результата...
+            </div>
+          )}
+        </div>
+      )}
+      {imageUrls.length > 1 && (
+        <div className="result-gallery">
+          {imageUrls.slice(0, 6).map((url) => (
+            <img key={url} src={url} alt="" />
+          ))}
+        </div>
+      )}
+      {listingText && (
+        <div className="listing-result">
+          <div className="listing-result-title">Текст объявления</div>
+          <p>{listingText}</p>
+        </div>
+      )}
+      {disclaimer && <div className="result-disclaimer">{disclaimer}</div>}
       <div className="result-actions">
         <button className="action-btn primary" onClick={handleDownload}>
-          💾 Скачать
+          {mediaUrl ? 'Скачать' : 'Скопировать'}
         </button>
         <button className="action-btn share" onClick={handleShare}>
-          📤 Поделиться
+          Поделиться
         </button>
       </div>
       {starBalance < 50 && onTopUp && (
         <div className="result-upsell" onClick={onTopUp}>
-          <span>⭐ Пополни баланс — бонус до +50%!</span>
+          <span>Пополните кредиты, чтобы обработать следующий объект</span>
         </div>
       )}
       <button className="new-generation-btn" onClick={handleNewGeneration}>
-        🔄 Создать ещё
+        Создать ещё
       </button>
     </div>
   );

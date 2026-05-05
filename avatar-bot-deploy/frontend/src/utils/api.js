@@ -566,7 +566,7 @@ export async function generateRemoveBg(userId, file, initData, onStep) {
 }
 
 // Enhance / Upscale (base64 напрямую — n8n загружает на S3)
-export async function generateEnhance(userId, file, initData, onStep) {
+export async function generateEnhance(userId, file, prompt, initData, onStep) {
   const step = (msg) => { if (onStep) onStep(msg); };
   try {
     step('[1/2] Подготовка фото...');
@@ -582,6 +582,9 @@ export async function generateEnhance(userId, file, initData, onStep) {
       mime_type: compressed.type || 'image/jpeg',
       init_data: initData,
     };
+    if (prompt && prompt.trim().length > 0) {
+      requestData.prompt = prompt.trim();
+    }
     return await apiRequest('generate-enhance', requestData, 120000, 0);
   } catch (error) {
     const msg = error?.message || String(error);
@@ -656,8 +659,13 @@ export async function broadcastPreview(password, filterType) {
   return apiRequest('admin-broadcast-preview', { password, filter_type: filterType || 'all' }, 15000, 0);
 }
 
+// Broadcast: history (last 5)
+export async function getBroadcastHistory(password) {
+  return apiRequest('admin-broadcast-history', { password }, 15000, 0);
+}
+
 // Broadcast: send or schedule
-export async function broadcastSend(password, { messageText, photoUrl, buttons, filterType, testUserId, scheduleAt }) {
+export async function broadcastSend(password, { messageText, photoUrl, buttons, filterType, testUserId, scheduleAt, adminUserId }) {
   return apiRequest('admin-broadcast', {
     password,
     message_text: messageText,
@@ -666,6 +674,7 @@ export async function broadcastSend(password, { messageText, photoUrl, buttons, 
     filter_type: filterType || 'all',
     test_user_id: testUserId || undefined,
     schedule_at: scheduleAt || undefined,
+    admin_user_id: adminUserId || undefined,
   }, 300000, 0);
 }
 
@@ -737,4 +746,217 @@ export async function generateNanoBanana(userId, files, prompt, initData, onStep
     if (msg.includes('Stage:')) throw error;
     throw new Error(`Stage: NANOBANANA, Error: ${msg}`);
   }
+}
+
+async function prepareRealEstatePhoto(file, maxWidth = 1200, quality = 0.85) {
+  const compressed = await compressImage(file, maxWidth, quality);
+  return {
+    photo_base64: await fileToBase64(compressed),
+    mime_type: compressed.type || 'image/jpeg',
+    file_name: compressed.name || 'property-photo.jpg',
+  };
+}
+
+function createClientRequestId(prefix) {
+  const randomId = window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}_${randomId}`;
+}
+
+const ROOM_LABELS = {
+  auto: 'тип помещения определить автоматически',
+  living_room: 'гостиная',
+  kitchen: 'кухня',
+  bedroom: 'спальня',
+  kids_room: 'детская',
+  bathroom: 'ванная комната',
+  hallway: 'прихожая',
+  studio: 'студия',
+  commercial: 'коммерческое помещение',
+};
+
+const STYLE_PROMPTS = {
+  modern_bright: 'современный светлый ремонт, светлые стены, аккуратная мебель, чистый просторный интерьер',
+  scandinavian: 'скандинавский интерьер, белый фон, дерево, мягкий свет, спокойный уют',
+  minimalism: 'минимализм, минимум деталей, чистые линии, много воздуха',
+  premium: 'премиальный интерьер, дорогие материалы, выразительное освещение, аккуратная мебель',
+  rental_ready: 'практичный свежий интерьер для аренды, нейтральные материалы, долговечная мебель',
+  cosmetic_fast: 'быстрый косметический ремонт, свежие стены, чистые поверхности, без капитальной перепланировки',
+  family_warm: 'теплый семейный интерьер, мягкий свет, уютная мебель, спокойные цвета',
+  neutral_sale: 'нейтральный интерьер для продажи, универсальный стиль, светло, чисто, подходит большинству покупателей',
+};
+
+function buildRealEstateRenovationPrompt(roomType, renovationStyle, disclaimer) {
+  const room = ROOM_LABELS[roomType] || ROOM_LABELS.auto;
+  const style = STYLE_PROMPTS[renovationStyle] || STYLE_PROMPTS.modern_bright;
+  return [
+    'AI visualization for a real estate listing.',
+    `Room: ${room}.`,
+    `Style: ${style}.`,
+    'Preserve the real room geometry, windows, doors, walls, camera angle and proportions.',
+    'Add tasteful renovation, furniture, lighting and clean staging. Do not add people, text, logos or watermarks.',
+    'Photorealistic interior, professional real estate photo, natural daylight.',
+    disclaimer || '',
+  ].filter(Boolean).join(' ');
+}
+
+function buildRealEstateEnhancePrompt(roomType) {
+  const room = ROOM_LABELS[roomType] || ROOM_LABELS.auto;
+  return [
+    `Improve this real estate photo of ${room}.`,
+    'Increase brightness, sharpness, color balance and perspective only.',
+    'Do not change furniture, renovation, layout, walls, windows or doors.',
+    'Keep the object truthful for a real estate listing.',
+  ].join(' ');
+}
+
+function buildRealEstateVideoPrompt(roomType, renovationStyle) {
+  const room = ROOM_LABELS[roomType] || ROOM_LABELS.auto;
+  const style = STYLE_PROMPTS[renovationStyle] || STYLE_PROMPTS.modern_bright;
+  return [
+    `Vertical real estate listing video for ${room}.`,
+    `Mood: ${style}.`,
+    'Slow smooth camera movement, clean professional property showcase, no text overlays, no people.',
+  ].join(' ');
+}
+
+function buildListingText(objectInfo = {}, prompt = '', disclaimer = '') {
+  const parts = [];
+  const location = [objectInfo.city, objectInfo.district].filter(Boolean).join(', ');
+  const titleBits = [
+    objectInfo.rooms ? `${objectInfo.rooms}-комнатная квартира` : 'Квартира',
+    objectInfo.area ? `${objectInfo.area} м2` : '',
+    location ? `в районе ${location}` : '',
+  ].filter(Boolean);
+
+  parts.push(titleBits.join(' ') + '.');
+  if (objectInfo.floor) parts.push(`Этаж: ${objectInfo.floor}.`);
+  if (objectInfo.price) parts.push(`Цена: ${objectInfo.price}.`);
+  if (objectInfo.highlights) parts.push(`Преимущества: ${objectInfo.highlights}.`);
+  if (prompt) parts.push(prompt.trim());
+  parts.push('Подойдет для публикации на Авито, Циан, Домклик и в Telegram. Добавьте реальные юридические параметры объекта перед публикацией.');
+  if (disclaimer) parts.push(disclaimer);
+
+  return parts.join('\n\n');
+}
+
+export async function generateRealEstateRenovation({
+  userId,
+  username,
+  file,
+  roomType,
+  renovationStyle,
+  initData,
+  cost,
+  disclaimer,
+}) {
+  const photo = await prepareRealEstatePhoto(file);
+  return apiRequest('generate', {
+    user_id: userId,
+    username: username || '',
+    init_data: initData,
+    mode: 'real_estate_renovation',
+    request_id: createClientRequestId('re_renovation'),
+    room_type: roomType,
+    style: buildRealEstateRenovationPrompt(roomType, renovationStyle, disclaimer),
+    cost,
+    disclaimer_required: true,
+    disclaimer,
+    ...photo,
+  }, 180000, 0);
+}
+
+export async function generateRealEstateEnhance({
+  userId,
+  username,
+  file,
+  roomType,
+  initData,
+  cost,
+  disclaimer,
+}) {
+  const photo = await prepareRealEstatePhoto(file);
+  return apiRequest('generate-enhance', {
+    user_id: userId,
+    username: username || '',
+    init_data: initData,
+    mode: 'real_estate_enhance',
+    request_id: createClientRequestId('re_enhance'),
+    room_type: roomType,
+    prompt: buildRealEstateEnhancePrompt(roomType),
+    cost,
+    disclaimer_required: true,
+    disclaimer,
+    ...photo,
+  }, 180000, 0);
+}
+
+export async function generateRealEstateVideo({
+  userId,
+  username,
+  files,
+  roomType,
+  renovationStyle,
+  initData,
+  cost,
+  disclaimer,
+}) {
+  const mainFile = files[0];
+  const lastFrameFile = files.length > 1 ? files[files.length - 1] : null;
+  return generateVideo(
+    userId,
+    mainFile,
+    buildRealEstateVideoPrompt(roomType, renovationStyle),
+    '5',
+    { quality: 'std', sound: false, aspect: '9:16', lastFrameFile },
+    initData
+  );
+}
+
+export async function generateRealEstateListingText({
+  userId,
+  username,
+  objectInfo,
+  prompt,
+  initData,
+  cost,
+  disclaimer,
+}) {
+  return {
+    listing_text: buildListingText(objectInfo, prompt, disclaimer),
+    mode: 'real_estate_listing_text',
+    request_id: createClientRequestId('re_listing_text'),
+  };
+}
+
+export async function generateRealEstatePackage({
+  userId,
+  username,
+  files,
+  roomType,
+  renovationStyle,
+  objectInfo,
+  prompt,
+  initData,
+  cost,
+  disclaimer,
+}) {
+  const videoResult = await generateRealEstateVideo({
+    userId,
+    username,
+    files,
+    roomType,
+    renovationStyle,
+    initData,
+    cost,
+    disclaimer,
+  });
+  const listingText = buildListingText(objectInfo, prompt, disclaimer);
+  const data = Array.isArray(videoResult) ? videoResult[0] : videoResult;
+  return {
+    ...data,
+    mode: 'real_estate_full_package',
+    listing_text: listingText,
+    text: listingText,
+    request_id: createClientRequestId('re_package'),
+  };
 }

@@ -1,4 +1,4 @@
-export const MODES = {
+export const LEGACY_MODES = {
   stylize: {
     id: 'stylize',
     name: 'Стилизация',
@@ -85,52 +85,100 @@ export const MODES = {
     emoji: '💬',
     description: 'Создай изображение по описанию',
     starCost: 8,
-    hasFree: false,
+    hasFree: true,
+    freeKey: 'free_text_to_image',
     resultType: 'image',
     endpoint: 'generate-text-to-image',
   },
-  // photosession: {
-  //   id: 'photosession',
-  //   name: 'Фотосессия',
-  //   emoji: '📸',
-  //   description: 'AI фотосессия — 10 фото по вашему образу',
-  //   starCost: 200,
-  //   hasFree: false,
-  //   resultType: 'image',
-  //   endpoint: 'generate-photosession',
-  //   minPhotos: 1,
-  //   maxPhotos: 2,
-  // },
-  // ai_magic: {
-  //   id: 'ai_magic',
-  //   name: 'AI Магия',
-  //   emoji: '🌟',
-  //   description: 'AI-аватары по фото',
-  //   starCost: 15,
-  //   hasFree: false,
-  //   resultType: 'image',
-  //   endpoint: 'generate-nanobanana',
-  //   minPhotos: 2,
-  //   maxPhotos: 8,
-  // },
+  photosession: {
+    id: 'photosession',
+    name: 'Фотосессия',
+    emoji: '📸',
+    description: 'AI фотосессия — 10 фото по вашему образу',
+    starCost: 200,
+    hasFree: false,
+    resultType: 'image',
+    endpoint: 'generate-photosession',
+    minPhotos: 1,
+    maxPhotos: 2,
+  },
+};
+
+export const MODES = {
+  real_estate_renovation: {
+    id: 'real_estate_renovation',
+    name: 'AI-ремонт',
+    emoji: '🏠',
+    description: 'Визуализация ремонта и мебели по фото комнаты',
+    starCost: 8,
+    hasFree: false,
+    resultType: 'image',
+    endpoint: 'generate',
+    minPhotos: 1,
+    maxPhotos: 1,
+  },
+  real_estate_enhance: {
+    id: 'real_estate_enhance',
+    name: 'Улучшить фото',
+    emoji: '📷',
+    description: 'Свет, резкость и цвет без изменения планировки и мебели',
+    starCost: 8,
+    hasFree: false,
+    resultType: 'image',
+    endpoint: 'generate-enhance',
+    minPhotos: 1,
+    maxPhotos: 1,
+  },
+  real_estate_video: {
+    id: 'real_estate_video',
+    name: 'Видео объекта',
+    emoji: '🎥',
+    description: 'Вертикальный ролик для объявления из 3–10 фото',
+    starCost: 155,
+    hasFree: false,
+    resultType: 'video',
+    endpoint: 'generate-video',
+    minPhotos: 3,
+    maxPhotos: 10,
+  },
+  real_estate_listing_text: {
+    id: 'real_estate_listing_text',
+    name: 'Текст объявления',
+    emoji: '📝',
+    description: 'Продающий текст для Авито, Циан, Домклик или Telegram',
+    starCost: 0,
+    hasFree: false,
+    resultType: 'text',
+    endpoint: 'local-listing-text',
+  },
+  real_estate_full_package: {
+    id: 'real_estate_full_package',
+    name: 'Полный пакет',
+    emoji: '💼',
+    description: 'AI-фото, видео объекта и готовый текст объявления',
+    starCost: 155,
+    hasFree: false,
+    resultType: 'mixed',
+    endpoint: 'generate-video',
+    minPhotos: 3,
+    maxPhotos: 10,
+  },
 };
 
 export const MODE_LIST = Object.values(MODES);
-export const DEFAULT_MODE = 'stylize';
+export const DEFAULT_MODE = 'real_estate_renovation';
 
 export function getStarCost(modeId, options = {}) {
-  const mode = MODES[modeId];
+  const mode = MODES[modeId] || LEGACY_MODES[modeId];
   if (!mode) return 0;
   if (typeof mode.starCost === 'number') return mode.starCost;
   if (typeof mode.starCost === 'object') {
-    // Style transfer: photoCount + resolution
     if (modeId === 'style_transfer') {
       const photoCount = options.photoCount || 2;
       const resolution = options.resolution || '2K';
       const bucket = photoCount <= 2 ? '2' : '3';
       return mode.starCost[`${bucket}_${resolution}`] || 30;
     }
-    // Video pricing: duration + quality + sound
     if (options.duration && options.videoQuality !== undefined) {
       const key = `${options.duration}_${options.videoQuality}_${options.videoSound ? 'on' : 'off'}`;
       return mode.starCost[key] || 155;

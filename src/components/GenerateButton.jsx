@@ -17,7 +17,7 @@ export default function GenerateButton({
             Генерирую...
           </span>
         ) : (
-          <span>{buttonLabel || '\u2728 Создать аватарку'}</span>
+          <span>{buttonLabel || 'Создать визуализацию'}</span>
         )}
       </button>
     </div>
