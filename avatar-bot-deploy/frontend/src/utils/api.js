@@ -2,7 +2,7 @@
 import { STYLES } from './styles.js';
 
 // n8n webhook base URL
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://n8n.creativeanalytic.ru:8443/webhook';
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://n8n.creativeanalytic.ru/webhook';
 
 // Задержка между повторными попытками
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));

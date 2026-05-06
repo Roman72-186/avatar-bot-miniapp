@@ -15,7 +15,7 @@
 
 Frontend недвижимости использует уже активные n8n endpoints:
 
-> Текущий серверный HTTPS-маршрут n8n работает через `https://n8n.creativeanalytic.ru:8443/webhook`, потому что порт `443` занят Marzban.
+> Текущий серверный HTTPS-маршрут n8n работает через `https://n8n.creativeanalytic.ru/webhook`.
 
 | UI-режим | Endpoint | Стоимость в UI | Что происходит |
 |---|---|---:|---|
