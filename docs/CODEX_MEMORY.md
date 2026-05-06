@@ -125,6 +125,14 @@ Backup before `/start` welcome change:
 
 - `/root/n8n/backups/workflow_entity-before-start-welcome-20260506-091600.sql`
 
+## Real Estate Renovation Mode Notes
+
+- User confirmed the renovation/remont flow works after the port migration.
+- A failed/odd generation happened because the uploaded image was not a room photo: it was an unrelated bot avatar image.
+- This is expected behavior: renovation mode should receive a real interior/property photo, such as a room, kitchen, bathroom, hallway, studio, or commercial space.
+- For unrelated portraits, avatars, logos, screenshots, or bot images, use stylize/enhance modes instead of renovation.
+- If UX is improved later, add frontend validation/help text for renovation mode: "Upload a real room/interior photo for best results."
+
 ## Security Notes
 
 - Do not store Telegram bot tokens, n8n passwords, Kie keys, or initData in this file.
